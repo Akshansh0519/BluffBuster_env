@@ -12,3 +12,4 @@ bitsandbytes
 matplotlib
 seaborn
 sentence-transformers
+pytest
