@@ -662,9 +662,32 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
 
     # ── Load model with Unsloth ─────────────────────────────────────────────
     # This call is what generates /app/unsloth_compiled_cache/UnslothGRPOTrainer.py.
-    print(f"Loading {config.model_name} (4-bit={config.use_4bit})...")
+    #
+    # Enable synchronous CUDA launches so any device-side assert surfaces at
+    # its true source (instead of the next async call). Costs ~5% throughput
+    # for a large debugging win. Remove once runs are consistently green.
+    os.environ.setdefault("CUDA_LAUNCH_BLOCKING", "1")
+    os.environ.setdefault("TORCH_USE_CUDA_DSA", "1")
+
+    # Prefer Unsloth's pre-quantized 4bit weights when available — on-the-fly
+    # bnb quantization of fresh HF weights is the known cause of
+    # "CUDA device-side assert during rotary init" with Qwen2.5-7B + Unsloth
+    # 2026.4.x. The pre-quantized variant skips that path entirely.
+    model_name = config.model_name
+    if config.use_4bit and not model_name.startswith("unsloth/"):
+        prequant_candidates = {
+            "Qwen/Qwen2.5-1.5B-Instruct": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+            "Qwen/Qwen2.5-7B-Instruct":   "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
+        }
+        alias = prequant_candidates.get(model_name)
+        if alias is not None:
+            print(f"[loader] substituting pre-quantized weights: "
+                  f"{model_name} -> {alias}")
+            model_name = alias
+
+    print(f"Loading {model_name} (4-bit={config.use_4bit})...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=config.model_name,
+        model_name=model_name,
         max_seq_length=config.max_seq_length,
         load_in_4bit=config.use_4bit,
         dtype=None,
