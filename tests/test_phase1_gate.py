@@ -205,8 +205,9 @@ def test_gate7_baselines_produce_valid_json():
     from examiner_env.action_parser import parse
     from examiner_env.models import MalformedAction
 
-    section_ids = CANONICAL_SECTIONS[:5]
-    env = ExaminerEnv(section_ids=section_ids, max_turns=4)
+    # Must use all 10 sections: ClassifyAction now requires exactly S01–S10.
+    section_ids = CANONICAL_SECTIONS
+    env = ExaminerEnv(section_ids=section_ids, max_turns=10)
     examiners = [
         RandomExaminer(seed=7),
         DefinitionalExaminer(),

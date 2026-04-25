@@ -119,11 +119,49 @@ def test_wrong_label_case_returns_malformed():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Test 7: partial classify (only 5 of 10 sections)
+# Test 7a: partial classify with only 1 section (Gate 0 sanity)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_partial_classify_with_invalid_section_returns_malformed():
-    """Classify with an invalid section key (S99) must be MalformedAction."""
+def test_partial_classify_one_section_returns_malformed():
+    """
+    Gate 0 sanity: classify with only S01 must be MalformedAction.
+    Spec: implementation_plan.md Phase 0 / Gate 0.
+    """
+    payload = json.dumps({
+        "action_type": "classify",
+        "classifications": {"S01": "KNOWS"},
+    })
+    result = parse(payload)
+    assert isinstance(result, MalformedAction), (
+        "Classify with only S01 (9 sections missing) must be MalformedAction"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Test 7b: partial classify with 5 valid section IDs (no invalid keys)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_partial_classify_five_valid_sections_returns_malformed():
+    """
+    Classify with 5 of 10 valid section IDs must still be MalformedAction.
+    All keys are canonical; the failure is on count, not key validity.
+    """
+    payload = json.dumps({
+        "action_type": "classify",
+        "classifications": {s: "KNOWS" for s in ["S01", "S02", "S03", "S04", "S05"]},
+    })
+    result = parse(payload)
+    assert isinstance(result, MalformedAction), (
+        "Classify with 5/10 valid sections must be MalformedAction (missing S06–S10)"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Test 7c: invalid section key (S99) — different failure mode from partial
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_classify_with_invalid_section_key_returns_malformed():
+    """Classify containing an invalid key (S99) must be MalformedAction."""
     payload = json.dumps({
         "action_type": "classify",
         "classifications": {"S01": "KNOWS", "S99": "FAKING"},

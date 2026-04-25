@@ -60,17 +60,26 @@ class ClassifyAction(BaseModel):
     classifications: dict[str, Literal["KNOWS", "FAKING"]]
 
     @model_validator(mode="after")
-    def check_all_sections_valid(self) -> "ClassifyAction":
-        """All provided section keys must be canonical; at least 1 required."""
+    def check_all_sections_present(self) -> "ClassifyAction":
+        """
+        A ClassifyAction is only valid when ALL 10 canonical sections are present.
+        Partial classifies (even with all-valid keys) must fail at parse time so
+        the parser returns MalformedAction rather than silently applying a P_cov
+        penalty later.  Spec: implementation_plan.md Phase 0 / Gate 0.
+        """
         provided = set(self.classifications.keys())
-        invalid = provided - CANONICAL_SECTIONS_SET
-        if invalid:
+        missing = CANONICAL_SECTIONS_SET - provided
+        extra = provided - CANONICAL_SECTIONS_SET
+        if missing or extra:
+            parts = []
+            if missing:
+                parts.append(f"missing: {sorted(missing)}")
+            if extra:
+                parts.append(f"invalid: {sorted(extra)}")
             raise ValueError(
-                f"classifications contains invalid section IDs: {sorted(invalid)}. "
-                f"Valid sections: {CANONICAL_SECTIONS}"
+                f"classifications must contain exactly all 10 canonical sections "
+                f"(S01–S10). {'; '.join(parts)}."
             )
-        if not provided:
-            raise ValueError("classifications must not be empty")
         return self
 
 
