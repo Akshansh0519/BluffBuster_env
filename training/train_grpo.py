@@ -331,6 +331,81 @@ def _install_unsloth_chunked_logsoftmax_patch(verbose: bool = True) -> list[str]
     return patched
 
 
+def _install_matmul_lora_patch() -> bool:
+    """
+    Dtype-safe replacement for Unsloth's matmul_lora (unsloth/kernels/utils.py).
+
+    Root cause in Unsloth 2026.4.x: matmul_lora determines `dtype` from the
+    LoRA B-matrix (float32) and calls B.to(dtype), but `out` is created in
+    fp16/bf16 from the surrounding autocast context.  addmm_(out_half, B_fp32)
+    then raises:  RuntimeError: self and mat2 must have the same dtype,
+    but got Half and Float.
+
+    Fix: always derive compute_dtype from X (the activation), cast W, A, B to
+    that dtype, and use F.linear (autograd-safe, dtype-consistent).
+
+    Must be called AFTER FastLanguageModel.get_peft_model().
+    """
+    import torch
+    import torch.nn.functional as F
+
+    try:
+        import unsloth.kernels.utils as _uu
+        import unsloth.kernels.fast_lora as _fl
+    except ImportError as exc:
+        print(f"[matmul-lora-patch] WARNING: could not import Unsloth kernels: {exc}")
+        return False
+
+    _fdq = getattr(_uu, "fast_dequantize", None)
+
+    def _safe_matmul_lora(X, W, W_quant, A, B, s, out=None):
+        dtype = X.dtype  # authoritative compute dtype from activations
+
+        # ── Dequantize base weight ──────────────────────────────────────────
+        W_fp = None
+        if W_quant is not None:
+            if _fdq is not None:
+                try:
+                    W_fp = _fdq(W_quant)
+                except Exception:
+                    pass
+            if W_fp is None:
+                try:
+                    import bitsandbytes.functional as _bnb
+                    W_fp = _bnb.dequantize_4bit(
+                        W_quant.data, W_quant.quant_state
+                    )
+                except Exception:
+                    pass
+            if W_fp is None and W is not None:
+                W_fp = W
+        else:
+            W_fp = W
+
+        # ── Base forward ────────────────────────────────────────────────────
+        if W_fp is not None:
+            base = F.linear(X, W_fp.to(dtype))
+        else:
+            out_dim = (
+                B.shape[0] if B is not None
+                else (W.shape[0] if W is not None else X.shape[-1])
+            )
+            base = X.new_zeros(*X.shape[:-1], out_dim)
+
+        # ── LoRA delta: (X @ A^T) @ B^T * s ────────────────────────────────
+        if A is not None and B is not None:
+            XA = F.linear(X, A.to(dtype))           # (…, r)
+            base = base + float(s) * F.linear(XA, B.to(dtype))  # (…, out)
+
+        return base
+
+    _uu.matmul_lora = _safe_matmul_lora
+    _fl.matmul_lora = _safe_matmul_lora
+    print("[matmul-lora-patch] dtype-safe matmul_lora installed "
+          "(Unsloth 2026.4.x Half/Float fix)")
+    return True
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #   Single-shot env rollout → reward
 # ══════════════════════════════════════════════════════════════════════════
@@ -647,6 +722,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     # Between from_pretrained() (which generates the compiled cache module)
     # and GRPOTrainer() (which will call the function on the first step).
     _install_unsloth_chunked_logsoftmax_patch()
+    _install_matmul_lora_patch()
 
     # ── Episode seed dataset ────────────────────────────────────────────────
     n = config.num_episodes
@@ -773,6 +849,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     # in case GRPOTrainer's __init__ caused a fresh import of the compiled
     # cache that bypassed the first sweep.
     _install_unsloth_chunked_logsoftmax_patch(verbose=False)
+    _install_matmul_lora_patch()
 
     print(f"\nStarting {config.config_name} training ({n} episodes)...")
     print(f"  Model: {config.model_name}")
