@@ -1,0 +1,1426 @@
+🧠 Master Hackathon Prompt — The BluffBuster Env (Upgraded Architecture, Opus Edition)
+
+You are a senior technical architect, RL systems engineer, and AI project manager embedded in our hackathon team. Your job is to read this entire prompt and generate the complete set of structured Markdown project documents listed at the end, with surgical precision.
+
+This prompt encodes a MIGRATION from a weaker previous implementation plan to a stronger, scientifically credible version of the same core idea. Every document you generate must reflect the NEW idea only. Do not reproduce weaknesses from the old plan. Where a conflict exists between what is described as "old" and what is described as "new," always implement the new.
+
+─────────────────────────────────────────────
+⚡️ TEAM CONTEXT — VIBE CODING TEAM OF 3
+─────────────────────────────────────────────
+All three team members are 100% vibe coding — every line of code is AI-generated (Claude, Cursor, Copilot, etc.). No one writes code manually. Every document must be optimized for AI consumption first, human readability second. Every instruction must be atomic, unambiguous, and paste-ready into an AI coding assistant. Think of every task as a prompt engineering problem, not a development task.
+
+Token Efficiency Mandate: Every prompt in these documents must be as short as possible while remaining complete. No fluff, no repetition. Tight, context-rich prompts win.
+
+Time Efficiency Mandate: Workflow division must be optimal for parallel execution. Dead time must be designed out. Every merge gate must be scoped so the Validator clears it without blocking either coder for more than a defined time window.
+
+Judging Mandate: Every document, every task, every prompt must be aware of and serve the judging criteria below. These are the primary design constraint for everything the team builds and presents.
+
+─────────────────────────────────────────────
+🏆 JUDGING CRITERIA (HARDCODED)
+─────────────────────────────────────────────
+Criterion                    | Weight | Meaning
+-----------------------------|--------|----------------------------------------------------------
+Environment Innovation        | 40%    | Novel, creative environment that meaningfully tests agent behavior in a way not done before
+Storytelling & Presentation   | 30%    | Clear problem explanation, engaging demo, non-technical judge can follow
+Showing Improvement in Rewards| 20%    | Observable training progress — reward curves, baseline comparisons, before/after behavior
+Reward & Training Pipeline    | 10%    | Coherent reward logic, measurable improvement, working pipeline
+
+Total: 100%. ENV_INNOV (40%) + STORYTELLING (30%) = 70% of score. Build something novel and explain it beautifully.
+
+─────────────────────────────────────────────
+🚨 MINIMUM SUBMISSION REQUIREMENTS (NON-NEGOTIABLE)
+─────────────────────────────────────────────
+Missing any single MSR is near-certain disqualification. Every document treats these as merge blockers and submission blockers — not suggestions.
+
+MSR-1  | Use OpenEnv (latest release) — build on top of it, do not reinvent it
+MSR-2  | Working training script using Unsloth or HuggingFace TRL, ideally as a runnable Colab notebook
+MSR-3  | Evidence of actual training — loss and reward plots from a real run (not mocked, not placeholder)
+MSR-4  | Short writeup — mini-blog on HuggingFace OR <2 min YouTube video OR short slide deck
+MSR-5  | Environment pushed to HuggingFace Space — discoverable and runnable
+MSR-6  | README complete — motivates problem, explains env, shows results
+MSR-7  | README links to HuggingFace Space
+MSR-8  | README links to all additional materials (video, blog, slides)
+MSR-9  | No large video files in HF Hub submission — use URL references only
+
+─────────────────────────────────────────────
+🎯 PROJECT IDENTITY — THE EXAMINER
+─────────────────────────────────────────────
+
+PROJECT NAME: The Examiner (codename: BluffBuster)
+
+CORE SCIENTIFIC CLAIM (defend this, nothing more):
+"We train an examiner agent to select questions that maximize information gain about a hidden KNOWS/FAKING partition, using GRPO over a controlled multi-style adversarial simulator. The reward is a programmatic composite of (i) terminal classification accuracy with asymmetric error costs, (ii) calibration via a KB-grounded posterior margin, and (iii) potential-based per-turn information-gain shaping — implementing a Bayesian-flavored diagnosis objective without any LLM judge."
+
+ONE-SENTENCE HONEST DESCRIPTION:
+"The Examiner is an RL environment where a language model learns to ask questions whose answers measurably shift a KB-grounded belief about whether a student is genuine or bluffing, then commit to a calibrated final verdict."
+
+THREE-SENTENCE PITCH NARRATIVE (verbatim in README, HF Space, writeup):
+"Most AI benchmarks reward getting the right answer — but almost none reward asking the right question. The Examiner is an adversarial RL environment where an examiner agent learns, through information-gain reward shaping and calibrated terminal scoring, to design questions that expose confident bluffing across multiple deceptive student styles. We train a language model examiner using GRPO and demonstrate measurable improvement over definitional and random baselines on held-out student styles and unseen topic sections, with reward decomposition that judges can audit live."
+
+WHAT A NON-TECHNICAL JUDGE MUST UNDERSTAND FROM THE DEMO:
+1. There is a student who may or may not truly know the material — the examiner cannot see which.
+2. The examiner asks questions and uses the answers to classify the student as KNOWS or FAKING.
+3. Each answer either makes the examiner more or less sure — like a doctor's diagnostic test. Good questions move the needle; bad ones don't.
+4. After training, the examiner asks sharper questions, becomes confident faster, and is right more often — and we can show the per-turn confidence trace live.
+
+HONEST CAVEATS TO INCLUDE IN ALL DOCUMENTS (judges trust teams who surface their own risks):
+- "Our current simulator uses a controlled family of seven scripted styles, not real human experts — this is the primary generalization risk, which we mitigate with multi-style fakers, held-out style evaluation, and held-out topic sections."
+- "We do not make claims about guaranteed short-run improvement — we demonstrate pipeline health, calibrated belief tracking, and behavioral shift on the held-out eval suite."
+- "Our KB-grounded posterior is a deterministic surrogate, not a true Bayesian oracle — we use it for reward shaping only, never as ground truth for accuracy."
+
+─────────────────────────────────────────────
+🏗️ NEW ARCHITECTURE — COMPLETE SPECIFICATION
+─────────────────────────────────────────────
+This section defines the target system. All documents must reflect exactly this architecture. If any previous plan contradicts this, the previous plan is wrong.
+
+════════════════════════════════════════════
+1. ENVIRONMENT OVERVIEW
+════════════════════════════════════════════
+
+Type: OpenEnv-compatible multi-turn RL environment
+Agent: Examiner (language model, fine-tuned via GRPO)
+Adversary: Student Simulator (scripted family — NOT trained, NOT the agent)
+Hidden State: Per-episode KNOWS/FAKING partition over 10 ML-theory sections
+Observable State: Section titles + dialogue history (NO hidden labels, NO style IDs, NO quality scores ever leak to the examiner)
+Episode Structure: Up to MAX_TURNS Ask actions, terminated by one Classify action or turn exhaustion
+Reward: Programmatic, computed at episode end. No LLM judge. No token-overlap heuristics.
+
+OpenEnv Compliance:
+- Inherits from OpenEnv base environment class (do not reimplement)
+- Exposes reset() → observation
+- Exposes step(action) → (observation, reward, done, info)
+- action_space and observation_space defined and registered
+- Environment registered via OpenEnv registry with a string ID
+
+════════════════════════════════════════════
+2. STUDENT SIMULATOR FAMILY (CRITICAL — DO NOT SIMPLIFY)
+════════════════════════════════════════════
+
+The student simulator is NOT a single scripted agent. It is a FAMILY of styles with PARAMETRIZED LEAK RATES, sampled per episode and per section. Leak rates are the critical knob that gives the diagnostic reward signal something real to detect — without them, fakers would be trivially detectable and the RL signal would be meaningless. Tune leak rates to make the discrimination task non-trivial but learnable.
+
+KNOWS Styles (3 modes — one sampled per section that is in the KNOWS partition):
+  K1: mechanistic-clear        — uses causal language, names specific mechanisms, gives concrete examples
+                                 mechanism_cue_emit_rate: 0.85   misconception_emit_rate: 0.05
+  K2: concise-expert           — brief accurate answers, correct but terse
+                                 mechanism_cue_emit_rate: 0.55   misconception_emit_rate: 0.05
+  K3: uncertainty-aware-expert — hedges appropriately ("I'm less sure about X but..."), still correct
+                                 mechanism_cue_emit_rate: 0.65   misconception_emit_rate: 0.08
+
+FAKING Styles (4 modes — one sampled per section that is in the FAKING partition):
+  F1: definitional-bluffer     — recites textbook definitions correctly, collapses under "why/how/edge-case" probes
+                                 mechanism_cue_emit_rate: 0.15   misconception_emit_rate: 0.30
+                                 collapse_under_mechanism_probe: 0.80  (probability the bluff visibly degrades when probed)
+  F2: jargon-matcher           — mirrors technical terms from the question; plausible-sounding but empty
+                                 mechanism_cue_emit_rate: 0.20 (parroted, low-context)   misconception_emit_rate: 0.25
+                                 jargon_mirror_rate: 0.70
+  F3: evasive-generalizer      — pivots to a safer adjacent topic; subtle subject change
+                                 mechanism_cue_emit_rate: 0.10   misconception_emit_rate: 0.20
+                                 topic_drift_rate: 0.60
+  F4: overconfident-handwaver  — very confident, very high-level, zero specificity; "this is basically just X"
+                                 mechanism_cue_emit_rate: 0.05   misconception_emit_rate: 0.40
+                                 specificity_score_cap: 0.20
+
+Leak rate semantics: each rate is the probability the corresponding token-class appears in a single response, modulated by the question's probe structure. A "why/how/edge-case" probe to a faker downshifts mechanism_cue_emit_rate by 50% and upshifts misconception_emit_rate by 50% — this is what creates the diagnostic gap that R_info can detect.
+
+Style Assignment:
+- Style sampled at episode reset using episode seed for reproducibility
+- Each section in KNOWS partition gets a KNOWS style; each section in FAKING partition gets a FAKING style
+- Per-section style is sampled independently; the same student can be K1 on S01 and K3 on S02
+- Style is never revealed to the examiner
+- Eval suite uses a HELD-OUT style combination that the examiner never sees during training (specified in eval_config.json)
+
+StudentProfile Object (required in implementation, Pydantic v2):
+  knowledge_mode: Literal["KNOWS", "FAKING"]
+  style: Literal["K1","K2","K3","F1","F2","F3","F4"]
+  section_id: str  (S01–S10)
+  verbosity: Literal["brief","medium","verbose"]   (sampled)
+  confidence_pattern: Literal["hedging","neutral","confident"]   (style-driven)
+  mechanism_cue_emit_rate: float  ∈ [0,1]
+  misconception_emit_rate: float  ∈ [0,1]
+  style_specific_params: dict     (collapse/mirror/drift/cap fields above)
+  seed: int                       (for reproducibility — same seed = byte-identical response)
+
+Student responses MUST be assembled deterministically from KB fields:
+- KNOWS templates draw from KB[section].mechanism_cues and KB[section].key_concepts
+- FAKING templates draw from KB[section].common_misconceptions and lexically-similar-but-shallow phrasings
+- Probe sensitivity: the response generator inspects question_text for probe markers (why/how/what-if/edge-case/counterexample) and applies the leak-rate modulation above
+- All sampling uses a per-(episode_seed, turn, section) RNG — reproducible across runs
+
+════════════════════════════════════════════
+3. KNOWLEDGE BASE — 10 ML-THEORY SECTIONS
+════════════════════════════════════════════
+
+Sections (static list — do not expand):
+  S01: Gradient Descent and Optimization
+  S02: Backpropagation
+  S03: Overfitting and Regularization
+  S04: Attention Mechanisms
+  S05: Transformer Architecture
+  S06: Loss Functions and Their Geometry
+  S07: Batch Normalization
+  S08: Convolutional Neural Networks
+  S09: Reinforcement Learning Basics
+  S10: Embeddings and Representation Learning
+
+Per-section KB structure (required for all 10 sections):
+  key_concepts: list[str]              — precise technical concepts (5–8 per section)
+  mechanism_cues: list[str]            — phrases/ideas genuine answers use ("chain rule", "vanishing gradient", "Jacobian")
+                                         each cue tagged with cue_strength ∈ {weak: 0.5, strong: 1.0}
+  common_misconceptions: list[str]     — shallow/wrong phrases fakers default to (5–8 per section)
+                                         each tagged with misconception_severity ∈ {minor: 0.5, major: 1.0}
+  probe_templates: list[str]           — 3–5 templates that reliably differentiate KNOWS from FAKING
+                                         each template tagged with probe_type ∈ {definitional, mechanism, edge_case, counterexample, application}
+  evidence_weights: dict               — α (mechanism cue weight), β (question relevance weight),
+                                         γ (misconception penalty weight) for the LLR scorer in §6.
+                                         Defaults: α=1.5, β=0.5, γ=1.0 — overridable per section if calibration requires.
+  reference_responses: dict            — pre-computed deterministic samples per (style, probe_type) pair,
+                                         used to seed the reference cache and validate leak-rate calibration.
+
+════════════════════════════════════════════
+4. ACTION SPACE — STRICT SCHEMA (DO NOT RELAX)
+════════════════════════════════════════════
+
+ALL model outputs must be valid JSON matching exactly one of these schemas.
+Malformed output = immediate malformed_action_penalty. No lenient parsing. No coercion.
+
+Action Type 1: Ask
+{
+  "action_type": "ask",
+  "section_id": "<canonical section ID, e.g. S01>",
+  "question_text": "<non-empty string, minimum 10 characters>"
+}
+
+Constraints:
+- section_id MUST be one of S01–S10
+- question_text MUST be non-empty and non-trivial (min 10 chars)
+- Duplicate or near-identical question to same section within an episode → repetition_penalty
+- Question to invalid section_id → hard penalty, episode continues
+
+Action Type 2: Classify (terminates episode)
+{
+  "action_type": "classify",
+  "classifications": {
+    "S01": "KNOWS" | "FAKING",
+    "S02": "KNOWS" | "FAKING",
+    ... (all 10 sections required)
+  }
+}
+
+Constraints:
+- ALL 10 section IDs must be present. Missing any → coverage_penalty applied.
+- Labels must be exactly "KNOWS" or "FAKING" (case-sensitive). Invalid label → penalized.
+- No "abstain" or "uncertain" — full classification required.
+- Classify action always terminates the episode regardless of turn count.
+
+Malformed Action Handling (any of these conditions):
+- Output is not valid JSON → malformed_action_penalty, episode ends or continues depending on config
+- action_type is missing or unrecognized → malformed_action_penalty
+- Required fields missing → malformed_action_penalty
+- Parser must NEVER silently coerce or ignore invalid output
+
+Action Parser (standalone module, examiner_env/action_parser.py):
+- parse(text: str) → Action | MalformedAction
+- validate(action: Action, canonical_sections: list, history: list) → ValidationResult
+- Unit tested against: empty string, valid ask, valid classify, missing section_id, wrong label, partial classifications, non-JSON prose, nested JSON, duplicate ask
+
+════════════════════════════════════════════
+5. OBSERVATION SPACE
+════════════════════════════════════════════
+
+The examiner observes at each turn:
+- List of all 10 section titles (canonical, no labels)
+- Current turn number
+- Remaining turns
+- Dialogue history: list of (section_id, question_text, student_response) tuples for all prior asks in this episode
+- Current available actions (always "ask" or "classify")
+
+The examiner NEVER observes:
+- Which sections are KNOWS or FAKING
+- Which student style is active for any section
+- Any quality score or label from prior questions
+- The hidden partition seed
+
+Scratchpad: Model may use internal chain-of-thought/scratchpad. This is NOT reward-bearing. It is not part of the observation. It does not affect reward computation.
+
+════════════════════════════════════════════
+6. REWARD FUNCTION — INFORMATION-GAIN COMPOSITE (PROGRAMMATIC, BOUNDED)
+════════════════════════════════════════════
+
+DESIGN PHILOSOPHY:
+The reward must mirror the scientific claim — the examiner is rewarded for asking questions whose answers carry the most information about the hidden KNOWS/FAKING partition, and for committing to a CALIBRATED final classification. We use:
+  (a) a sparse terminal reward (correctness + asymmetric error costs + calibration margin),
+  (b) a potential-based dense shaping signal (per-turn information gain), which by Ng et al. (1999) does NOT change the optimal policy,
+  (c) hard step-level penalties for malformed/repeated/invalid actions.
+
+All components are programmatic, deterministic given (seed, KB, dialogue), bounded, and computed without any LLM judge or token-overlap heuristic. Reward is finalized at episode end. Step-level penalties fire immediately AND accumulate into the terminal reward for logging.
+
+────────────────────────────────────────────
+6.1 KB-GROUNDED POSTERIOR ORACLE  (used ONLY for shaping — never observed by examiner, never used as ground truth)
+────────────────────────────────────────────
+
+For each section s, the oracle maintains a binary posterior p_t(s) = P(KNOWS | history_t).
+
+After turn t in which the examiner asked question q about section s and received response r, the oracle updates:
+
+  evidence(r, s) = α · mechanism_cue_coverage(r, KB[s]) − γ · misconception_count(r, s)
+  relevance(q, s) = β · probe_strength(q, KB[s].probe_templates)
+  LLR_t(s)        = relevance(q, s) · evidence(r, s)         (clipped to [−3, +3])
+
+  posterior_t(s)  = sigmoid( logit(p_{t−1}(s)) + LLR_t(s) )
+
+Sections not asked this turn keep their prior. Initial p_0(s) = 0.5 ∀ s.
+
+Constants α, β, γ are loaded from KB[s].evidence_weights (defaults 1.5, 0.5, 1.0).
+Calibrate constants on a 200-episode held-out KB calibration split BEFORE training begins; store calibrated values in outputs/eval/oracle_calibration.json. Target: oracle posterior at t=MAX_TURNS achieves ≥75% accuracy on calibration split with mean Brier score ≤0.18.
+
+The oracle is a deterministic surrogate, NOT a true Bayesian oracle. It is used only to (i) shape R_info and (ii) compute R_cal. It is never used to grade final accuracy — that uses true_label.
+
+────────────────────────────────────────────
+6.2 REWARD COMPONENTS  (all bounded, weights explicit)
+────────────────────────────────────────────
+
+──── Terminal components (computed on Classify) ────
+
+R_acc   = (1/N) · Σ_s [ 1 if classification[s]==true_label[s] else −1 ]                 ∈ [−1, +1]
+          where N = number of sections classified (typically 10)
+
+R_asym  = − (λ_FA · #false_accusations + λ_FE · #false_exonerations) / N                ∈ [−0.5, 0]
+          λ_FA = 0.5  (KNOWS labeled FAKING — costlier; punishing genuine students)
+          λ_FE = 0.3  (FAKING labeled KNOWS — letting bluffers pass)
+          Asymmetry encodes the project's value judgment that false accusations are worse.
+
+R_cal   = (0.4/N) · Σ_s sign(correct(s) − 0.5) · |2·p_T(s) − 1|                          ∈ [−0.4, +0.4]
+          Rewards confident-correct (high posterior margin AND right) and punishes confident-wrong.
+          Implements calibration without requiring the model to emit explicit probabilities.
+
+R_eff   = 0.20 · max(0, (MAX_TURNS − turns_used) / MAX_TURNS) · 𝟙[R_acc > 0]            ∈ [0, +0.20]
+          Efficiency only earned when accuracy is positive. No reward for fast-wrong answers.
+
+R_cov   = − 0.30 · 𝟙[any required section missing from classify]
+          − 0.05 · (#missing_sections / 10)                                              ∈ [−0.35, 0]
+
+──── Shaping components (potential-based; aggregated at episode end) ────
+
+R_info  = 0.40 · clip( Σ_t ΔH_t , 0, 1 )                                                 ∈ [0, +0.40]
+          ΔH_t = H(p_{t−1}) − H(p_t)
+          H(p) = − (1/N) · Σ_s [ p_s·log p_s + (1−p_s)·log(1−p_s) ]   (mean per-section binary entropy, log base 2)
+          ΔH_t is per-turn entropy reduction summed over the episode and clipped to [0, 1] before scaling.
+          This is the PRIMARY diagnostic signal. Rewards questions whose answers measurably move the oracle posterior toward truth. Potential-based: total = φ(p_T) − φ(p_0) where φ = −H, so optimal policy is unchanged vs. terminal-only reward.
+
+R_qual  = 0.10 · mean_over_asks( question_features(q) )                                  ∈ [0, +0.10]
+          question_features ∈ [0, 1] is question-side only (does not depend on response):
+            0.40 · 𝟙[mechanism_probe_present]   (why/how/mechanism keywords or KB cue match)
+          + 0.30 · 𝟙[specificity_demand]        (asks for example, edge case, or quantitative answer)
+          + 0.30 · 𝟙[edge_case_or_counterexample]  (boundary, failure mode, comparison probes)
+          Pure prior on good questioning style. Decoupled from response so it can't be gamed by friendly fakers.
+
+R_div   = 0.05 · ( #unique_sections_asked / min(turns_used, N_sections) )                ∈ [0, +0.05]
+          Lightweight diversity bonus; prevents collapse onto one section.
+
+──── Hard penalties (per-step; sum into terminal reward) ────
+
+P_malformed   = − 0.20 · #malformed_outputs                                              ≤ 0
+P_repetition  = − 0.10 · #near_duplicate_asks   (cos_sim > 0.85 to prior ask in same section, sentence-transformer or KB-cue Jaccard fallback)   ≤ 0
+P_invalid_sec = − 0.10 · #asks_with_invalid_section_id                                   ≤ 0
+
+──── Total ────
+
+R_total = R_acc + R_asym + R_cal + R_eff + R_cov + R_info + R_qual + R_div
+        + P_malformed + P_repetition + P_invalid_sec
+
+THEORETICAL BOUNDS:  R_total ∈ [ −2.05 ,  +1.95 ]
+EXPECTED EMPIRICAL RANGE (DEMO config, after 200 eps): random ≈ −0.3, definitional ≈ +0.1, trained target ≥ +0.6
+Random-rollout bounds are recomputed at training start and stored in outputs/eval/reward_bounds.json. Trainer will warn if observed reward exceeds theoretical bounds (indicates a bug).
+
+────────────────────────────────────────────
+6.3 GRPO INTEGRATION
+────────────────────────────────────────────
+
+The environment returns RAW bounded R_total. NEVER pre-normalize inside the env — the trainer owns advantage normalization.
+
+GRPOTrainer applies group-normalization per prompt across K=num_generations rollouts:
+  A_i = (R_i − μ_group) / (σ_group + 1e−6)
+  A_i is then clipped to [−5, +5] before policy update (advantage clipping for stability).
+
+KL coefficient: β_kl = 0.04 (lower than default to allow exploration, higher than 0 to stay close to base model). Increase to 0.1 if reward variance > 1.0 per group.
+
+Reward variance budget per batch: target σ(R) ∈ [0.2, 1.0]. If σ(R) < 0.05 over 50 episodes, the run is degenerate (reward signal collapsed) — trainer logs a warning and Validator escalates.
+
+────────────────────────────────────────────
+6.4 REFERENCE CACHE
+────────────────────────────────────────────
+
+Pre-computed at environment init for each (section_id, probe_type) pair from KB.
+Stores: (i) genuine baseline answer fingerprint (mechanism_cue set, length, specificity score),
+        (ii) per-style expected leak fingerprint (used to validate simulator calibration only — not in reward).
+Cache is deterministic, reproducible via seed, and saved to outputs/eval/reference_cache.pkl.
+NEVER exposed to the examiner. NEVER used as a target for token-overlap (that approach is REMOVED — see §12).
+
+────────────────────────────────────────────
+6.5 REWARD HACKING MITIGATIONS (audited by Validator)
+────────────────────────────────────────────
+
+- Always-KNOWS / always-FAKING: R_acc + R_asym strictly negative on any mixed-truth episode; R_cal also collapses since posterior never moves away from prior 0.5.
+- Single generic question repeated: P_repetition fires; ΔH ≈ 0 → R_info ≈ 0; R_qual ≈ 0; R_div ≤ 0.05.
+- Asking one section, classifying others blindly: R_info only earned for asked sections; R_cal ≈ 0 on un-asked sections; R_cov small but R_acc dominated by guessing.
+- Ending immediately at turn 0: R_eff = 0 (gated on R_acc>0), R_info = 0, posteriors at prior → R_cal ≈ 0, R_acc near random.
+- Parser exploit (gibberish output): P_malformed fires every step.
+- Style memorization: held-out style on eval suite collapses R_info gains; this is the generalization metric we report.
+- Jargon-mimicking examiner (mirroring fake style): R_qual is question-side only and rewards mechanism cues, not jargon density.
+- Posterior-gaming via leading questions: relevance(q, s) caps R_info contribution per turn; LLR clipped to [−3, +3] prevents single-turn explosion.
+- Calibration gaming (always confidently right): only possible if oracle is well-calibrated, in which case it IS the desired behavior (not gaming).
+
+────────────────────────────────────────────
+6.6 REWARD BREAKDOWN OUTPUT (required interface)
+────────────────────────────────────────────
+
+reward.py must expose:
+
+  @dataclass
+  class RewardBreakdown:
+      R_acc: float; R_asym: float; R_cal: float; R_eff: float; R_cov: float
+      R_info: float; R_qual: float; R_div: float
+      P_malformed: float; P_repetition: float; P_invalid_sec: float
+      R_total: float
+      posterior_trace: list[dict[str, float]]   # p_t(s) per turn per section
+      info_gain_per_turn: list[float]           # ΔH_t per turn
+
+  def compute_reward(episode: EpisodeResult, kb: KnowledgeBase) -> RewardBreakdown
+
+Every RewardBreakdown is logged to W&B per episode and used by HF Space Tab 1 to render the live reward decomposition and posterior trace.
+
+════════════════════════════════════════════
+7. BASELINE EXAMINERS (REQUIRED — NOT OPTIONAL)
+════════════════════════════════════════════
+
+Three baseline examiners must be implemented in examiner_env/baselines.py:
+
+B1: RandomExaminer
+  - Randomly samples section_id from S01–S10
+  - Randomly samples a question from that section's probe_templates in KB
+  - After MAX_TURNS/2 asks, classifies randomly
+  - Serves as lower bound
+
+B2: DefinitionalExaminer
+  - Always asks definitional questions ("What is X?", "Define X.")
+  - After asking each section once, classifies based on response length heuristic
+  - Serves as "safe but naive" baseline — what a non-diagnostic examiner does
+  - This is the PRIMARY comparison for before/after storytelling (not random)
+
+B3: BayesianHeuristicExaminer (implement — this is the strong non-learned baseline, critical for credibility)
+  - Cycles through KB.probe_templates by probe_type (definitional → mechanism → edge_case → counterexample)
+  - Maintains its own copy of the posterior oracle from §6.1 over the dialogue
+  - Stops asking a section once |p_t(s) − 0.5| > 0.4 (confident enough)
+  - Classifies each section by argmax of final posterior
+  - Serves as the "no-RL upper bound" — if TrainedExaminer doesn't beat this, the RL gain is questionable
+  - This is the SECONDARY comparison after DefinitionalExaminer (which remains the storytelling primary)
+
+ALL baselines must use the same environment interface as the trained examiner.
+ALL baselines are evaluated on the SAME held-out eval suite as the trained examiner.
+Comparison table: [RandomExaminer | DefinitionalExaminer | BayesianHeuristicExaminer | TrainedExaminer]
+  × [accuracy | false_accusation_rate | false_exoneration_rate | avg_turns | avg_info_gain_per_turn | calibration_score(ECE) | R_total_mean]
+
+════════════════════════════════════════════
+8. EVALUATION ARCHITECTURE (SEPARATE FROM TRAINING)
+════════════════════════════════════════════
+
+Frozen Eval Suite (created ONCE before training begins, never modified):
+  - 50 episodes with fixed seeds
+  - Uses HELD-OUT fake styles: eval suite uses F1+F2 styles only during training, then tested on F3+F4 (or a defined held-out combination — specify in config)
+  - Uses HELD-OUT sections: 2 sections (e.g., S09, S10) are never used in training episodes
+  - Seeds are fixed and stored in eval_config.json
+
+Evaluation runs:
+  - Before training: run all 3 baselines on frozen eval suite → store results in outputs/eval/baseline_metrics.json
+  - During training: evaluate trained checkpoint every N steps on frozen eval suite (not on training rollouts) → store in outputs/eval/checkpoint_metrics.json
+  - After training: final eval on frozen eval suite → store in outputs/eval/final_metrics.json
+
+Metrics computed per eval run (all logged per-episode and aggregated):
+  - classification_accuracy            (per section and overall)
+  - false_accusation_rate              (KNOWS classified as FAKING)
+  - false_exoneration_rate             (FAKING classified as KNOWS)
+  - avg_turns_to_classify              (efficiency proxy)
+  - avg_info_gain_per_turn             (mean ΔH_t — measures question diagnosticity)
+  - terminal_posterior_correctness     (% of sections where sign(p_T − 0.5) matches truth)
+  - calibration_ECE                    (Expected Calibration Error of p_T vs truth, 10-bin)
+  - calibration_brier                  (Brier score of p_T)
+  - mean_R_qual, mean_R_info, mean_R_cal  (per-component reward means)
+  - parse_failure_rate                 (#malformed / #steps)
+  - reward_mean, reward_std            (R_total)
+  - per_style_accuracy                 (broken out by F1/F2/F3/F4 and K1/K2/K3 — exposes failure modes)
+
+Generalization checks (required for credible demo):
+  - Style generalization: does trained examiner beat DefinitionalExaminer AND BayesianHeuristicExaminer on the held-out fake style? (primary novelty claim)
+  - Topic generalization: does trained examiner beat both baselines on held-out sections it never trained on?
+  - Calibration generalization: is ECE on held-out eval ≤ ECE of BayesianHeuristicExaminer? (sanity check the RL didn't break calibration)
+  - Failure-mode disclosure: report the worst-performing (style, section) cell in per_style_accuracy honestly in the writeup.
+
+════════════════════════════════════════════
+9. TRAINING CONFIGURATION — STAGED (NOT SINGLE MONOLITHIC RUN)
+════════════════════════════════════════════
+
+THREE TRAINING TIERS (config-selectable, not hardcoded):
+
+DEBUG config (smoke test — run this first, always):
+  sections: S01, S02, S03 (3 sections)
+  max_turns: 3
+  num_episodes: 20
+  fake_styles: F1 only
+  eval_episodes: 10
+  model: "Qwen/Qwen2.5-1.5B-Instruct" (smallest viable)
+  Purpose: verify pipeline health — finite rewards, non-constant reward distribution, valid parser outputs, successful backprop + logging
+
+DEMO config (evidence generation — submit this):
+  sections: S01–S05 (5 sections)
+  max_turns: 4
+  num_episodes: 200
+  fake_styles: F1, F2 (2 training styles)
+  eval_styles: F3 (1 held-out style)
+  held_out_sections: S05
+  eval_episodes: 50
+  model: "Qwen/Qwen2.5-7B-Instruct" with Unsloth 4-bit quantization
+  Purpose: produce real training evidence and held-out generalization results
+
+FULL config (if time and hardware allow):
+  sections: all 10
+  max_turns: 6
+  num_episodes: 500
+  fake_styles: F1, F2, F3 (3 training styles)
+  eval_styles: F4 (1 held-out style)
+  held_out_sections: S09, S10
+  eval_episodes: 100
+  model: "Qwen/Qwen2.5-7B-Instruct"
+
+GRPO/Unsloth Settings (for DEMO config — adjust for DEBUG proportionally):
+  lora_rank: 16
+  lora_alpha: 32
+  max_seq_length: 2048
+  batch_size: 2
+  gradient_accumulation: 8
+  learning_rate: 5e-6                  # lowered from 1e-5; GRPO is sensitive to LR with composite reward
+  num_generations: 8                   # raised from 4; group-normalization needs ≥ 6 to stabilize advantages
+  bf16: true
+  4bit_quantization: true
+  beta_kl: 0.04                        # KL penalty to base model — exploration vs. drift trade-off
+  advantage_clip: 5.0                  # clip A_i = (R − μ)/(σ+ε) to ±5 before policy update
+  reward_variance_floor: 0.05          # if σ(R) over 50 eps < 0.05 → trainer warns (degenerate reward)
+  reward_variance_ceiling: 1.5         # if σ(R) > 1.5 → raise beta_kl to 0.10 automatically
+  max_grad_norm: 1.0
+  warmup_ratio: 0.05
+  checkpoint_every_n_steps: 50
+  eval_every_n_steps: 50
+
+SMOKE TEST DEFINITION (what success looks like for DEBUG config):
+  ✓ Pipeline runs without crash for 20 episodes
+  ✓ Reward values are finite (not NaN, not inf) and within theoretical bounds [−2.05, +1.95]
+  ✓ Reward distribution variance σ(R_total) ∈ [0.05, 1.5]  (not collapsed, not exploding)
+  ✓ Per-component reward breakdowns (R_acc, R_info, R_cal, R_qual, ...) are all logged separately
+  ✓ Parser outputs are logged and parse_failure_rate < 0.5
+  ✓ W&B receives R_total + every per-component reward as separate metrics
+  ✓ Posterior trace logged for at least one episode (used by HF Space Tab 1)
+  ✓ Eval suite runs and produces baseline_metrics.json with all 4 baselines (R/D/B/Trained-init)
+  ✓ Oracle calibration check passes: oracle_calibration.json shows mean Brier ≤ 0.18 on calibration split
+  NOTE: No hard assertion that reward improves in smoke test. Pipeline health is the goal. Improvement is measured on DEMO config over the held-out eval suite, primarily via Δaccuracy and Δavg_info_gain_per_turn vs. BayesianHeuristicExaminer.
+
+════════════════════════════════════════════
+10. TRANSCRIPT SELECTION — BEHAVIOR-BASED (NOT EPISODE-INDEX)
+════════════════════════════════════════════
+
+DO NOT select transcripts by episode number (not "episode 10 vs episode 400"). This is brittle and dishonest.
+
+Select transcripts by BEHAVIORAL QUALITY:
+
+"BEFORE" transcript (weak examiner):
+  → Select from DefinitionalExaminer baseline on frozen eval suite
+  → Criteria: definitional/repetitive questions, low diagnostic_score, wrong final classification
+  → Must be on same episode seed as the "AFTER" transcript for apples-to-apples comparison
+
+"AFTER" transcript (trained examiner):
+  → Select from trained examiner on frozen eval suite (same episode seed as "BEFORE")
+  → Criteria: high diagnostic_score (mechanism/causal/edge-case questions), correct final classification
+  → Reveal hidden ground truth at the end of the transcript display
+
+scripts/select_transcripts.py must implement this logic:
+  - Load frozen eval suite results for DefinitionalExaminer and TrainedExaminer
+  - Filter for episodes where DefinitionalExaminer was wrong and TrainedExaminer was correct
+  - Among those, select the episode with the largest gap in diagnostic_score
+  - Output: before_transcript.json, after_transcript.json, episode_seed used, ground_truth revealed
+
+════════════════════════════════════════════
+11. HF SPACE — DEMO DESIGN
+════════════════════════════════════════════
+
+The HF Space must show a COMPARISON — not just a single run. This is the key storytelling upgrade.
+
+Tab 1: "Live Episode" — user triggers one episode with a visible hidden state
+  - Show: section titles presented to examiner, then each examiner ask, student response
+  - LIVE POSTERIOR TRACE: per-section line chart of p_t(s) over turns (the "doctor's confidence dial")
+  - PER-TURN INFO GAIN: bar chart of ΔH_t — judges can see which questions actually moved the needle
+  - After classify: reveal ground truth partition AND highlight where the examiner was confidently wrong (calibration failures)
+  - Show full reward breakdown: R_acc, R_asym, R_cal, R_eff, R_cov, R_info, R_qual, R_div, penalties — separately, with totals
+
+Tab 2: "Baseline vs Trained" — same episode seed, four examiners side by side
+  - Same episode seed run through: Random | Definitional | BayesianHeuristic | Trained
+  - Show questions each asks, student responses, classifications, correctness
+  - Highlight: trained examiner asks mechanism-probing questions earlier and stops asking sooner once posterior is confident
+  - Side-by-side posterior traces — visually shows the "trained examiner is more decisive" claim
+
+Tab 3: "Training Evidence" — real plots from actual training run
+  - R_total curve (mean per eval checkpoint, with std band)
+  - Per-component reward curves (R_acc, R_info, R_cal stacked or small-multiples)
+  - Classification accuracy curve
+  - False accusation rate AND false exoneration rate curves
+  - avg_info_gain_per_turn curve over training
+  - Calibration ECE curve over training
+  - Comparison bar chart: [Random | Definitional | BayesianHeuristic | Trained] on held-out eval suite
+  - Per-style accuracy heatmap (rows: styles, cols: sections) — shows generalization story
+  - All plots derived from real W&B/training outputs — no static mocks
+
+Tab 4: "Environment Details" — for technical judges
+  - Student style family diagram with leak rates table
+  - Action schema (JSON examples)
+  - Reward component breakdown with formulas and theoretical bounds
+  - Posterior oracle pseudocode (LLR update equation)
+  - KB sample (one section fully expanded)
+  - Held-out eval results table
+
+════════════════════════════════════════════
+12. WHAT IS EXPLICITLY REMOVED FROM OLD PLAN
+════════════════════════════════════════════
+
+These items existed in a previous version of this project. They are REMOVED. Do not implement them. Do not reference them. Do not generate prompts for them.
+
+REMOVED — Adaptive difficulty (difficulty scaling every 50 episodes):
+  Reason: introduces confounding variables, makes eval less interpretable, not needed for hackathon.
+
+REMOVED — Episode-index transcript selection (episode 10 vs episode 400):
+  Reason: brittle, dishonest. Replaced by behavior-quality-based selection (see section 10).
+
+REMOVED — Hard assertion that 10 GRPO steps must show reward improvement:
+  Reason: unrealistic for short smoke tests. Replaced by pipeline health checks.
+
+REMOVED — "3 visible training phases" as a hardcoded narrative:
+  Reason: scripted storytelling that may not match reality. If real phases emerge from data, describe them. If not, do not narrate them.
+
+REMOVED — Token-overlap divergence as the diagnostic quality metric:
+  Reason: brittle to prompt/wording changes, not grounded. Replaced by KB-grounded posterior LLR + information-gain shaping.
+
+REMOVED — Single generic fake student:
+  Reason: examiner would overfit to one caricature. Replaced by 4 fake styles with parametrized leak rates.
+
+REMOVED — "World's first" and "traditional benchmarks are dead" language:
+  Reason: overclaiming. Replaced by precise scientific claim (see PROJECT IDENTITY section).
+
+REMOVED — Single 7B full training as default/only config:
+  Reason: likely to OOM on Colab without staged approach. Replaced by DEBUG/DEMO/FULL tier configs.
+
+REMOVED — Symmetric ±1 per-section accuracy reward without calibration or asymmetric error costs:
+  Reason: doesn't reflect real-world cost of false accusations vs. false exonerations and gives no signal for confident-wrong vs. confident-right behavior. Replaced by R_acc + R_asym + R_cal triple.
+
+REMOVED — Step-level dense reward shaping NOT tied to information theory (e.g., per-step "good question" bonuses based on heuristic keyword counts):
+  Reason: introduces non-stationary objectives, can be gamed, and biases the optimal policy. Replaced by potential-based R_info using oracle entropy reduction (theoretically guaranteed not to bias optimal policy).
+
+REMOVED — In-environment reward normalization (z-scoring inside step()):
+  Reason: corrupts GRPO advantage computation and hides reward bugs. Trainer owns normalization; environment returns raw bounded reward.
+
+REMOVED — Using the posterior oracle as ground truth for accuracy:
+  Reason: the oracle is a deterministic surrogate, not truth. Accuracy is always graded against the hidden true_label partition; the oracle is shaping-only.
+
+═══════════════════════════════════════════
+13. FILE OWNERSHIP MAP
+═══════════════════════════════════════════
+
+Coder 1 (C1) — Environment & Simulator:
+  examiner_env/__init__.py
+  examiner_env/action_parser.py         ← CRITICAL: strict JSON parser, validation, penalties
+  examiner_env/environment.py           ← OpenEnv-inheriting main env class
+  examiner_env/student.py               ← StudentProfile, style family, all 7 styles + leak rates
+  examiner_env/knowledge_base.py        ← 10 sections, probe_templates, misconceptions, mechanism_cues, evidence_weights
+  examiner_env/posterior_oracle.py      ← KB-grounded LLR scorer, posterior tracker, ΔH_t computation (NEW)
+  examiner_env/reward.py                ← All 11 reward components, RewardBreakdown dataclass, reference cache
+  examiner_env/question_features.py     ← Question-side R_qual computation (mechanism/specificity/edge-case)
+  examiner_env/baselines.py             ← Random, Definitional, BayesianHeuristic examiners
+  examiner_env/models.py                ← Pydantic action schemas, StudentProfile, EpisodeState, RewardBreakdown
+  examiner_env/calibration.py           ← Oracle constant calibration script (run once before training) (NEW)
+  tests/test_parser.py                  ← Parser robustness unit tests
+  tests/test_student_styles.py          ← Style family + leak rate behavioral tests
+  tests/test_posterior_oracle.py        ← Oracle determinism, LLR bounds, calibration tests (NEW)
+  tests/test_reward.py                  ← Reward component unit tests + bounds + RewardBreakdown contract
+
+Coder 2 (C2) — Training, Eval, Deployment:
+  training/train_grpo.py                ← GRPO training loop, Unsloth/TRL integration
+  training/eval.py                      ← Frozen eval suite runner, baseline comparison
+  training/prompt_builder.py            ← Examiner prompt construction (section titles + history + schema)
+  training/reward_fn.py                 ← Wrapper that connects training to examiner_env reward
+  training/config.py                    ← DEBUG/DEMO/FULL config definitions
+  scripts/select_transcripts.py         ← Behavior-based transcript selection
+  scripts/generate_plots.py             ← Evidence plots from real W&B/training outputs
+  hf_space/app.py                       ← Gradio app: 4 tabs as specified
+  hf_space/README.md                    ← HF Space model card
+  outputs/eval/                         ← baseline_metrics.json, checkpoint_metrics.json, final_metrics.json,
+                                          reward_bounds.json, oracle_calibration.json, reference_cache.pkl
+  outputs/plots/                        ← All plot files (per-component reward curves, ECE, info-gain, heatmaps)
+  outputs/transcripts/                  ← before_transcript.json, after_transcript.json (with posterior traces)
+  notebooks/train_examiner.ipynb        ← Colab notebook (MSR-2)
+
+Shared (all three):
+  README.md
+  eval_config.json                      ← frozen eval suite seeds, held-out style/section config
+  requirements.txt
+
+Validator:
+  guardrails.md                         ← supreme authority
+  implementation_validator.md
+  submission_checklist.md
+  mistakes.md
+
+═══════════════════════════════════════════
+14. SCIENTIFIC HONESTY CONSTRAINTS (ENFORCED IN ALL DOCUMENTS)
+═══════════════════════════════════════════
+
+These constraints apply to ALL documents, ALL prompts, ALL storytelling:
+
+1. Never claim improvement without evidence from frozen eval suite (not training rollouts).
+2. Never compare against random baseline only — DefinitionalExaminer is the primary storytelling comparison; BayesianHeuristicExaminer is the harder credibility comparison.
+3. Never reproduce plots unless they are derived from real training run data (MSR-3).
+4. Never select transcripts by episode index — always by behavioral quality metric (largest R_info gap with correctness flip).
+5. Never claim the trained examiner generalizes to real humans — only to the simulator family with stated leak rates.
+6. Always acknowledge: "Our simulator uses scripted styles with parametrized leak rates, not real human bluffing."
+7. Always acknowledge: "Our posterior oracle is a KB-grounded surrogate used for shaping, not a Bayesian truth."
+8. Never assert "the agent learned X" without pointing to a specific metric that demonstrates X (preferred metrics: Δaccuracy on held-out style, Δavg_info_gain_per_turn, ΔECE).
+9. The information-gain shaping is potential-based and theoretically does not bias the optimal policy — state this when explaining R_info to technical judges.
+10. If the training run does not show improvement on the held-out eval suite, report honestly and explain pipeline health was confirmed. Disclose the worst per_style_accuracy cell.
+11. Never use the posterior oracle as ground truth for grading accuracy — accuracy is always vs. true_label.
+12. Never normalize reward inside the environment — trainer owns advantage normalization; raw bounded reward is the contract.
+
+═══════════════════════════════════════════
+15. TECH STACK (LOCKED — NO DEVIATIONS)
+═══════════════════════════════════════════
+
+Component              | Technology                        | Version          | MSR
+-----------------------|-----------------------------------|------------------|------
+RL Environment         | OpenEnv (latest release)          | latest           | MSR-1
+Training Framework     | Unsloth + TRL (GRPO)              | latest           | MSR-2
+Training Notebook      | Google Colab                      | —                | MSR-2
+Base Model             | Qwen2.5-7B-Instruct (demo config) | current HF        | —
+Reward Logging         | Weights & Biases                  | latest           | MSR-3
+HF Deployment          | HuggingFace Spaces + Hub          | —                | MSR-5, MSR-7
+Data Validation        | Pydantic v2                       | ≥2.0             | —
+Demo UI                | Gradio                            | ≥4.0             | MSR-5
+Action Schema          | JSON (strict)                     | —                | —
+Config Management      | Python dataclasses + config.py    | —                | —
+
+BANNED APPROACHES (these trigger scope violations):
+- Custom training loops that bypass Unsloth/TRL (violates MSR-2)
+- Reimplementing OpenEnv base classes (violates MSR-1)
+- Local-only training with no logged artifacts (violates MSR-3)
+- Video files committed to HF Hub (violates MSR-9)
+- LLM judge in reward computation (introduces non-determinism)
+- Token-overlap divergence as diagnostic score (removed — see section 12)
+- Loose text parsing for actions (removed — see section 4)
+
+─────────────────────────────────────────────
+📄 DOCUMENTS TO GENERATE
+─────────────────────────────────────────────
+
+Generate all of the following documents. Every document must be fully consistent with every other document. No contradictions. No references to removed features. Every AI prompt must be paste-ready and token-optimized.
+
+════════════════════════════════════════════
+DOCUMENT 1: guardrails.md
+════════════════════════════════════════════
+The supreme authority document. Supersedes all other documents in conflict. First file every team member reads at every session start.
+
+Section 1: Judging Criteria Alignment Matrix
+For each criterion (ENV_INNOV 40%, STORYTELLING 30%, REWARD_EVIDENCE 20%, PIPELINE 10%):
+  - Exactly what makes our environment novel — written as a crisp, defensible claim tied to the NEW architecture
+  - List of specific design decisions that exist solely to maximize this score
+  - ENV_INNOV claim: "Multi-style adversarial simulator family + hidden-state diagnostic questioning as an RL task" — expand and defend
+  - What "innovative enough" looks like vs what would be considered derivative
+  - AI prompt guardrail: if AI generates an environment mechanic that exists in CartPole/MuJoCo/Atari, flag for review
+  - Checkpoints where innovation is re-validated
+
+For STORYTELLING: core 3-sentence narrative from PROJECT IDENTITY verbatim. Demo sequence: environment running → DefinitionalExaminer (weak) → TrainedExaminer (strong) → held-out eval results → reward curve.
+
+For REWARD_EVIDENCE: exact evidence we will produce — frozen eval suite comparison table [RandomExaminer | DefinitionalExaminer | TrainedExaminer], reward curves over training, behavior-selected transcripts. Baseline must be DefinitionalExaminer (not just random).
+
+For PIPELINE: reward pseudocode in plain English (matching reward function spec in section 6). Smoke test definition matching DEBUG config.
+
+Section 2: MSR Checklist (all 9, checkbox format, with owner, phase, and one-line verification)
+
+Section 3: Scope Guardrails
+  IN scope (derive from this prompt — exhaustive list)
+  OUT scope (exhaustive — include all removed features from section 12)
+  Scope Creep Triggers specific to this project:
+    - AI adding LLM judge to reward computation
+    - AI expanding action space with "abstain" or "uncertain" options
+    - AI adding adaptive difficulty
+    - AI selecting transcripts by episode index
+    - AI reimplementing OpenEnv base classes
+    - AI using token-overlap divergence for diagnosticity
+    - AI generating single-style fake students
+    - AI writing loose text parsers instead of strict JSON validators
+
+Section 4: Tech Stack Guardrails (from section 15 — locked, version-pinned)
+
+Section 5: AI Tool Usage Rules
+  - Always paste action schema JSON when prompting for any parsing code
+  - Always paste StudentProfile structure when prompting for simulator code
+  - Always paste reward pseudocode when prompting for reward function code
+  - Always paste OpenEnv base class interface when prompting for environment methods
+  - Always include canonical section IDs (S01–S10) in any section-referencing prompt
+  - 2 re-prompt attempts max before escalating to Validator
+
+Section 6: Code Quality Non-Negotiables (RL-specific):
+  - All hyperparameters in config.py — never hardcoded
+  - Every training run emits to W&B (MSR-3 blocker)
+  - Reward function must be exactly the pseudocode from architecture.md — no AI improvisation
+  - Action parser must have unit tests passing before any training run
+  - Student style family must have behavioral tests before training run
+  - No placeholder reward returns
+  - Colab notebook runs top-to-bottom with no modifications (MSR-2)
+  - HF Space tested in incognito before final submission (MSR-5)
+
+Section 7: Git Non-Negotiables (no commits to main, no force push, structured commit messages, file ownership enforced)
+
+Section 8: Storytelling Non-Negotiables:
+  - 3-sentence narrative verbatim in README, HF Space description, and writeup
+  - Demo shows: environment running → DefinitionalExaminer weak episode → TrainedExaminer strong episode → held-out comparison table → reward curve
+  - NO "3 visible phases" narration unless phases genuinely emerge from real data
+  - Writeup produced incrementally, not last-minute
+  - Honest caveats from PROJECT IDENTITY section appear in writeup
+
+Section 9: Session Start Ritual (pull main → read mistakes → check MSR status → confirm ownership → check phase → paste context_primer → begin)
+Section 10: Session End Ritual (sanity checks → MSR update → log mistakes → commit → update progress → handoff if at gate)
+Section 11: Guardrails Versioning
+
+════════════════════════════════════════════
+DOCUMENT 2: architecture.md
+════════════════════════════════════════════
+Complete, AI-scaffoldable architectural overview aligned to judging criteria and MSRs.
+
+Full system architecture in Mermaid: components, connections, OpenEnv inheritance (MSR-1), training pipeline (Colab → Unsloth/TRL → W&B → HF Hub — MSR-2,3), deployment (HF Space — MSR-5), eval pipeline (frozen eval suite → comparison table)
+
+Data flow diagrams for:
+  - Single episode (reset → ask loop → classify → reward computation → metrics)
+  - Training step (prompt build → model generation → action parse → env step → reward → GRPO update → W&B log)
+  - Full training run (DEBUG → confirm pipeline health → DEMO → eval checkpoints → final eval → transcript selection → plot generation)
+  - Submission artifact pipeline (plots → transcripts → HF Space → README → writeup)
+
+Tech stack table: Component | Technology | Version | Justification | MSR satisfied
+
+OpenEnv integration: exact base classes inherited, methods overridden, methods not to touch, links to OpenEnv docs
+
+Student Simulator Architecture:
+  - StudentProfile dataclass (all fields)
+  - 7-style family diagram (K1/K2/K3, F1/F2/F3/F4)
+  - Style sampling procedure
+  - KB integration (mechanism_cues, misconceptions, probe_templates)
+  - Eval-only held-out styles
+
+Action Schema Architecture:
+  - JSON schemas for Ask and Classify (exact from section 4)
+  - Parser module (action_parser.py) responsibility
+  - Validation pipeline and penalty assignment
+  - Unit test coverage requirements
+
+Reward Function Architecture (pseudocode, this is the source of truth):
+  Components listed exactly per section 6 of this prompt
+  Reference cache design for diagnostic_component
+  Reward hacking mitigations documented
+
+Training Pipeline Architecture:
+  - Model choice and quantization per config tier
+  - Config tier table (DEBUG/DEMO/FULL — exact values from section 9)
+  - reward_fn.py role as bridge between training and environment
+  - prompt_builder.py: what the examiner sees (section titles + history + action schema)
+  - W&B logging: what is logged, when, format
+
+Evaluation Architecture:
+  - Frozen eval suite design (seeds, held-out styles, held-out sections)
+  - Eval run schedule (before training, every N steps, after training)
+  - metrics computed per run
+  - Comparison table design
+
+Transcript Selection Architecture (behavior-based per section 10)
+
+HF Space Architecture (4 tabs per section 11)
+
+Per-component Vibe Coding Notes: scaffold prompt, common AI mistakes for that component, post-generation verification, token-efficient context to include
+
+Folder/file structure tree: annotated with purpose, owner (C1/C2/VAL/SHARED), MSR satisfied
+
+Environment variables and config: every variable, description, example value
+
+⚠️ Warning labels on HuggingFace API patterns AI tools commonly get wrong (push_to_hub, Space deployment, model card format)
+
+════════════════════════════════════════════
+DOCUMENT 3: implementation_plan.md (Master Reference)
+════════════════════════════════════════════
+Phases → Stages → Tasks. Every task includes: Atomic goal | AI prompt (paste-ready) | Context files to attach | Expected output | Judging criterion served | MSR satisfied | Time estimate (minutes) | Dependencies | Parallel opportunities | Sanity check (exactly 3 conditions) | Re-prompt strategy | Merge gate flag 🔀
+
+Phase 0 — Foundation (both coders in parallel):
+  C1: KB setup (10 sections × full structure), models.py (Pydantic schemas), action_parser.py skeleton, OpenEnv registration
+  C2: Repo structure, Colab notebook skeleton, W&B setup, eval_config.json (frozen suite seeds), DEBUG config
+  Gate: C1 can parse Ask and Classify JSON. C2 has notebook skeleton running on Colab. W&B receives a test metric. MSR-1 partial, MSR-2 partial.
+
+Phase 1 — Environment Core (C1 primary, C2 assists on eval):
+  C1: student.py (all 7 styles with leak rates), posterior_oracle.py, calibration.py (oracle calibration run), examiner_env/environment.py (reset/step/OpenEnv inheritance), question_features.py (question-side only), reward.py (all 11 components, RewardBreakdown), baselines.py (Random/Definitional/BayesianHeuristic), tests/test_parser.py, tests/test_student_styles.py, tests/test_posterior_oracle.py, tests/test_reward.py
+  C2: eval.py (frozen eval suite runner with full §8 metrics), baseline evaluation run on all 4 baselines, baseline_metrics.json generation
+  Gate: Single episode runs end-to-end without crash. All 4 baselines produce valid outputs on frozen eval suite. Parser unit tests pass. Reward bounded in [-2.05, +1.95] and non-constant (σ ≥ 0.05). Oracle calibration ≤ 0.18 Brier. R_acc + R_asym + R_cal + R_eff + R_cov + R_info + R_qual + R_div + penalties == R_total to 1e-9 (decomposition contract). MSR-1 fully satisfied.
+  ⚠️ Gate blocker: tests must pass AND oracle calibration must succeed before any training code begins.
+
+Phase 2 — Training Pipeline (C2 primary, C1 validates reward wiring):
+  C2: train_grpo.py (Unsloth + TRL + GRPO), reward_fn.py (bridge), prompt_builder.py, training/config.py, DEBUG smoke test run
+  C1: reward unit tests green, verify reward_fn.py matches reward.py exactly
+  Smoke test: DEBUG config runs 20 episodes. Reward finite. Non-constant variance. W&B receives metrics. parse_failure_rate logged. No hard improvement assertion.
+  Gate: Pipeline health confirmed on DEBUG config. W&B shows non-trivial reward distribution. MSR-2 partial, MSR-3 partial.
+
+Phase 3 — Training Run & Evidence (C2 primary):
+  C2: DEMO config training run (200 episodes, 5 sections, F1+F2 styles). Eval checkpoint every 50 steps. Final eval on frozen suite (F3 held-out style, S05 held-out section). Generate outputs/eval/final_metrics.json.
+  C1: transcript selection via scripts/select_transcripts.py (behavior-based — largest R_info gap with correctness flip, includes posterior traces), scripts/generate_plots.py (per-component reward curves, ECE, info-gain, per-style heatmap)
+  Gate: Real training artifacts exist. Plots are derived from actual W&B logs. Comparison table [Random | Definitional | BayesianHeuristic | Trained] exists with accuracy + avg_info_gain_per_turn + ECE columns. before_transcript.json and after_transcript.json exist with posterior traces embedded. Per-style accuracy heatmap rendered. MSR-3 satisfied.
+
+Phase 4 — Deployment (C2 primary):
+  C2: hf_space/app.py (4 tabs), HF Space deployment, Colab notebook end-to-end test (top-to-bottom, no modifications), README draft
+  Gate: HF Space live and publicly accessible in incognito. Colab runs top-to-bottom as judge. README links to Space. MSR-5, MSR-6, MSR-7, MSR-8, MSR-9 all satisfied. Validator runs full MSR check.
+
+Phase 5 — Storytelling (all three):
+  Writeup/blog on HuggingFace (or short slide deck) with 3-sentence narrative, demo walkthrough, honest caveats, held-out eval results table, reward curve image
+  README polished: honest caveats included, comparison table linked, 3-sentence narrative at top
+  Gate: MSR-4 satisfied. All MSRs re-verified. Validator clears full submission checklist.
+
+Phase 6 — Final Validation:
+  Full submission checklist pass (under 10 minutes)
+  Demo run in incognito
+  All 3 team members sign off
+  Submit
+
+════════════════════════════════════════════
+DOCUMENT 4: implementation_coder1.md
+════════════════════════════════════════════
+C1's complete self-contained vibe coding playbook for environment and simulator work.
+
+Assigned modules: examiner_env/ (all files), tests/ (all files)
+File ownership list (path-level, from section 13)
+MSR ownership: MSR-1 (environment compliance), contributes to MSR-3 (reward wiring)
+Judging criterion ownership: ENV_INNOV (40%) — C1's work is the primary driver
+
+Parallel work map: what C1 does while C2 is building training pipeline, where they sync
+
+For every task (Phase 0 through Phase 3 for C1 scope):
+
+Task C1-0.1: KB Construction
+  Goal: Implement knowledge_base.py with all 10 sections, each with key_concepts, mechanism_cues, common_misconceptions, probe_templates
+  Prompt: [paste-ready, token-optimized — instructs AI to implement KB as a Python dict/dataclass, lists all 10 section IDs and fields required]
+  Context: models.py (schema), this document (KB spec from section 3)
+  Expected output: knowledge_base.py with 10 fully populated sections
+  Sanity: (1) All 10 section IDs present. (2) Each section has ≥3 probe_templates. (3) mechanism_cues are non-empty and specific (not generic).
+  Time: 45 min
+
+Task C1-0.2: Pydantic Action Schemas (models.py)
+  Goal: Implement strict Pydantic v2 models for AskAction, ClassifyAction, StudentProfile, EpisodeState, ValidationResult
+  Prompt: [paste-ready — includes exact JSON schemas from section 4, instructs AI to use Pydantic v2 with custom validators that reject invalid section IDs, empty question_text, non-KNOWS/FAKING labels]
+  Sanity: (1) AskAction rejects empty question_text. (2) ClassifyAction rejects missing sections and invalid labels. (3) StudentProfile covers all 7 styles.
+  Time: 30 min
+
+Task C1-0.3: Action Parser (action_parser.py)
+  Goal: Implement parser that returns Action | MalformedAction with all validation logic
+  Prompt: [paste-ready — instructs AI to implement parse(text) → Action | MalformedAction, validate(action, canonical_sections, history) → ValidationResult, lists all 8 malformed cases to handle]
+  Sanity: (1) parse("") returns MalformedAction. (2) parse(valid_ask_json) returns AskAction. (3) parse(valid_classify_json_missing_sections) returns MalformedAction.
+  Time: 45 min
+
+Task C1-0.4: Parser Unit Tests (tests/test_parser.py)
+  Goal: Test all 8 malformed action cases + all valid cases
+  Prompt: [paste-ready — lists exact test cases: empty string, valid ask, valid classify, missing section_id, wrong label string, partial classifications, non-JSON prose, nested JSON, near-duplicate ask]
+  Sanity: (1) All 8 malformed cases produce MalformedAction. (2) All 2 valid cases produce correct Action type. (3) pytest exits 0.
+  Time: 30 min
+
+Task C1-1.1: Student Simulator (student.py)
+  Goal: Implement StudentProfile sampling, all 7 response styles WITH parametrized leak rates from §2, deterministic answer generation using KB misconceptions / mechanism_cues / probe-sensitive modulation
+  Prompt: [paste-ready — instructs AI to implement StudentProfile dataclass with mechanism_cue_emit_rate, misconception_emit_rate, style_specific_params; sample_style(knowledge_mode, seed) function; generate_response(question, section_id, profile, kb, turn) that (a) detects probe markers in question_text, (b) modulates leak rates per §2 (probe → faker mechanism rate ×0.5, misconception rate ×1.5), (c) for FAKING uses KB.common_misconceptions weighted by misconception_severity, (d) for KNOWS uses KB.mechanism_cues weighted by cue_strength, (e) seeds RNG with (episode_seed, turn, section)]
+  Context: knowledge_base.py, models.py, full §2 leak-rate table from this prompt
+  Sanity: (1) F1 style response to a "why" probe contains ≤1 strong mechanism_cue and ≥1 misconception (over 100 samples). (2) K1 style response contains ≥2 mechanism_cues on average (over 100 samples). (3) Same (episode_seed, turn, section, question) produces byte-identical response across runs.
+  Time: 120 min
+
+Task C1-1.2: Student Style Tests (tests/test_student_styles.py)
+  Goal: Test that each of 7 styles produces qualitatively different responses, seeds are reproducible
+  Prompt: [paste-ready]
+  Sanity: (1) K1 and F1 responses to same question are detectably different (keyword overlap < threshold). (2) Same seed produces identical response. (3) All 7 styles produce non-empty responses.
+  Time: 30 min
+
+Task C1-1.3: Environment Class (environment.py)
+  Goal: OpenEnv-inheriting environment with reset(seed) → observation, step(action) → (obs, reward, done, info)
+  Prompt: [paste-ready — instructs AI to inherit from OpenEnv base class (paste the base class interface into the prompt), implement reset, step, _build_observation, episode state management (section partition, style assignments, dialogue history, turn count), termination on Classify or turn exhaustion]
+  ⚠️ CRITICAL: paste OpenEnv base class interface into this prompt. AI will hallucinate it otherwise.
+  Context: action_parser.py, knowledge_base.py, student.py, models.py, reward.py (after completion)
+  Sanity: (1) reset() returns observation with all 10 section titles and empty history. (2) step(ask_action) returns done=False and appends to dialogue history. (3) step(classify_action) returns done=True with reward in info.
+  Time: 90 min
+
+Task C1-1.4: Question Features (question_features.py)
+  Goal: Implement R_qual computation — question-side ONLY, response-independent (per §6.2)
+  Prompt: [paste-ready — instructs AI to implement question_features(question_text, kb, section_id) → float[0,1] using exactly: 0.40·𝟙[mechanism_probe_present (regex on why/how/mechanism + KB cue keyword match)] + 0.30·𝟙[specificity_demand (asks for example/edge-case/quantitative/specific)] + 0.30·𝟙[edge_case_or_counterexample (boundary/failure mode/comparison probes)]. Do NOT take student_response as input — R_qual must be question-side only to prevent gaming.]
+  Sanity: (1) "What is gradient descent?" → ~0.0 (purely definitional). (2) "Why does momentum help convergence and what happens when β→1?" → ≥0.7 (mechanism + edge-case). (3) Function ignores student_response argument if accidentally passed.
+  Time: 45 min
+
+Task C1-1.4b: Posterior Oracle (posterior_oracle.py) — NEW, BLOCKS reward
+  Goal: Implement KB-grounded LLR scorer + posterior tracker per §6.1
+  Prompt: [paste-ready — instructs AI to implement: (a) mechanism_cue_coverage(response, kb_section) using cue_strength weights; (b) misconception_count(response, kb_section) using misconception_severity weights; (c) probe_strength(question, probe_templates); (d) compute_llr(question, response, kb_section, alpha, beta, gamma) → float, clipped to [-3, +3]; (e) PosteriorTracker class with update(section, question, response) and current_posterior(section) → float, plus entropy(p) helper using log base 2; (f) trace recorded as list[dict[section_id, p]] per turn for HF Space Tab 1.]
+  ⚠️ CRITICAL: paste §6.1 equations verbatim into the prompt. AI will improvise weights otherwise.
+  Sanity: (1) Tracker initialized with 0.5 prior on every section. (2) After mechanism-rich response on KNOWS section, posterior moves >0.5. After misconception-heavy response, posterior moves <0.5. (3) Same (seed, dialogue) sequence produces identical posterior trace across runs.
+  Time: 75 min
+
+Task C1-1.4c: Oracle Calibration (calibration.py) — NEW, BLOCKS training
+  Goal: Calibrate (α, β, γ) on a 200-episode held-out KB calibration split before training
+  Prompt: [paste-ready — generates 200 synthetic episodes (mix of KNOWS/FAKING styles), runs the oracle, fits (α, β, γ) per section to minimize Brier score subject to ≥75% terminal accuracy on the calibration split. Saves outputs/eval/oracle_calibration.json.]
+  Sanity: (1) Output JSON has per-section (α, β, γ). (2) Mean Brier ≤ 0.18. (3) Terminal accuracy ≥ 0.75.
+  Time: 60 min
+
+Task C1-1.5: Reward Function (reward.py)
+  Goal: Implement compute_reward(episode_result, kb) → RewardBreakdown with ALL 11 components from §6.2 + R_total + posterior_trace + info_gain_per_turn
+  Prompt: [paste-ready — paste §6.2 verbatim. Instructs AI to implement: R_acc, R_asym (with λ_FA=0.5, λ_FE=0.3), R_cal (margin from terminal posterior), R_eff (gated on R_acc>0), R_cov, R_info (potential-based, ΔH_t clipped to [0,1] then summed and clipped to [0,1] before ×0.4), R_qual (calls question_features), R_div, P_malformed, P_repetition, P_invalid_sec. RewardBreakdown is a frozen dataclass with all fields. Sum to R_total. Assert finite + within theoretical bounds [-2.05, +1.95]; raise on violation.]
+  ⚠️ CRITICAL: AI must NOT improvise. Paste §6.2 verbatim. Reward function reads p_T from PosteriorTracker, never recomputes.
+  ⚠️ CRITICAL: do NOT normalize R_total inside this function. Trainer owns normalization.
+  Sanity: (1) All-correct classification with 4 perfect-info turns: R_acc=+1, R_asym=0, R_cal>0, R_info>0, R_total in [+0.8, +1.95]. (2) Single KNOWS classified as FAKING: contributes −0.5/N to R_asym AND −1/N·|2p−1| to R_cal if posterior was confident. (3) Malformed action reduces R_total by exactly 0.2. (4) R_total within [-2.05, +1.95] for all valid episodes.
+  Time: 90 min
+
+Task C1-1.6: Reward Unit Tests (tests/test_reward.py)
+  Goal: Test each reward component in isolation + bounds + reproducibility
+  Sanity: (1) All-correct classify with full info-gain: R_total > +0.8. (2) All-wrong confident classify: R_total < −1.0 (asymmetric + miscalibration). (3) Malformed-only episode: R_total = max(−2.05, num_malformed·−0.2 + R_cov + R_acc_random). (4) Reward decomposition sums exactly to R_total (Σ components == R_total ± 1e-9). (5) Same EpisodeResult input produces byte-identical RewardBreakdown across runs.
+  Time: 45 min
+
+Task C1-1.7: Baselines (baselines.py)
+  Goal: Implement RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer per §7
+  Prompt: [paste-ready — defines each baseline's question-asking and classification logic exactly per §7. BayesianHeuristicExaminer maintains its own PosteriorTracker, cycles probe types in order definitional→mechanism→edge_case→counterexample, stops on a section once |p−0.5|>0.4, classifies by argmax.]
+  Sanity: (1) RandomExaminer produces valid Ask and Classify actions. (2) DefinitionalExaminer always asks "What is [section title]?" style questions. (3) BayesianHeuristicExaminer's stop-condition fires on at least 50% of KNOWS sections within MAX_TURNS on a smoke run. (4) All three baselines complete episodes without crash and beat random (DefinitionalExaminer accuracy > RandomExaminer accuracy on calibration split).
+  Time: 75 min
+
+Validator handoff template (pre-written, fill-in-the-blank): Phase | MSR status | Tests passing | Gate condition met | Handoff to C2 for training wiring
+
+What C1 must NOT do:
+  - Implement training code (C2 owns that)
+  - Use token-overlap for diagnostic score (removed)
+  - Allow LLM calls inside reward computation
+  - Implement adaptive difficulty
+  - Allow loose text parsing for actions
+  - Implement single-style fake student
+
+════════════════════════════════════════════
+DOCUMENT 5: implementation_coder2.md
+════════════════════════════════════════════
+C2's complete self-contained vibe coding playbook for training, eval, and deployment.
+
+Assigned modules: training/, scripts/, hf_space/, notebooks/, outputs/ (from section 13)
+MSR ownership: MSR-2 (training script), MSR-3 (real plots), MSR-5 (HF Space), MSR-7/8/9 (README links)
+Judging criterion ownership: REWARD_EVIDENCE (20%), PIPELINE (10%), STORYTELLING (30% co-owned)
+
+Parallel work map: what C2 does while C1 builds environment (repo structure, Colab skeleton, W&B setup, eval_config.json, frozen eval suite runner skeleton)
+
+For every task (Phase 0 through Phase 5 for C2 scope):
+
+Task C2-0.1: Repo Structure + Colab Skeleton
+  Goal: Initialize repository structure matching project_structure.md, create notebooks/train_examiner.ipynb with section headers and install cells
+  Prompt: [paste-ready — lists exact folder/file tree from section 13, instructs AI to create skeleton files with docstrings, Colab-compatible install cells using !pip install]
+  Sanity: (1) Colab notebook imports without error on clean runtime. (2) All directories exist. (3) No local file path assumptions in any cell.
+  Time: 30 min
+
+Task C2-0.2: W&B Setup + Eval Config
+  Goal: Implement W&B logging scaffold and create eval_config.json with 50 fixed seeds, held-out style assignments, held-out section IDs
+  Prompt: [paste-ready]
+  Sanity: (1) W&B receives a test metric. (2) eval_config.json is valid JSON with 50 seeds. (3) Held-out styles and sections match DEMO config spec.
+  Time: 30 min
+
+Task C2-0.3: Training Config (training/config.py)
+  Goal: Implement DEBUG, DEMO, FULL config dataclasses with all hyperparameters from section 9
+  Prompt: [paste-ready — lists all fields from DEBUG/DEMO/FULL tables in section 9]
+  Sanity: (1) DEBUG config has 3 sections and max_turns=3. (2) DEMO config has 5 sections, max_turns=4. (3) All hyperparameters are in config, none hardcoded elsewhere.
+  Time: 20 min
+
+Task C2-1.1: Frozen Eval Suite Runner (training/eval.py)
+  Goal: Implement eval runner that takes examiner (baseline or trained), runs on frozen eval suite, returns metrics dict matching §8
+  Prompt: [paste-ready — instructs AI to implement run_eval(examiner, eval_config) → EvalMetrics covering ALL metrics from §8: classification_accuracy (overall + per_section), false_accusation_rate, false_exoneration_rate, avg_turns_to_classify, avg_info_gain_per_turn, terminal_posterior_correctness, calibration_ECE (10-bin), calibration_brier, mean_R_qual, mean_R_info, mean_R_cal, parse_failure_rate, reward_mean, reward_std, per_style_accuracy (dict[style → accuracy]). Metrics computed from the RewardBreakdown.posterior_trace and per-component fields.]
+  ⚠️ Note: eval runner must work before training code exists (for baseline evaluation)
+  ⚠️ Note: ECE computation requires posterior_trace from RewardBreakdown — make sure environment populates it.
+  Sanity: (1) RandomExaminer eval completes without crash. (2) DefinitionalExaminer eval completes. (3) BayesianHeuristicExaminer eval completes. (4) All metrics are finite, non-NaN; ECE ∈ [0, 1]; per_style_accuracy keys cover all styles in eval suite.
+  Time: 75 min
+
+Task C2-1.2: Baseline Evaluation Run
+  Goal: Run all 4 baselines (Random, Definitional, BayesianHeuristic, Trained-init) on frozen eval suite, save outputs/eval/baseline_metrics.json
+  Sanity: (1) JSON file exists with metrics for all 4 baselines. (2) DefinitionalExaminer outperforms RandomExaminer in classification_accuracy (sanity that eval suite is working). (3) BayesianHeuristicExaminer outperforms DefinitionalExaminer in avg_info_gain_per_turn (sanity that oracle is working). (4) All metrics finite.
+  Time: 30 min (after environment Phase 1 is complete)
+
+Task C2-2.1: Prompt Builder (training/prompt_builder.py)
+  Goal: Implement build_prompt(observation, action_schema_examples) → str that constructs the examiner's input
+  Prompt: [paste-ready — specifies exactly what examiner sees: section titles, turn number, remaining turns, dialogue history, action schema with 2 examples (one Ask, one Classify), instruction to output only valid JSON]
+  ⚠️ CRITICAL: prompt must not leak hidden state. Validator must verify no section labels or style IDs appear.
+  Sanity: (1) Prompt contains all 10 section titles. (2) Prompt includes valid JSON examples for both action types. (3) No hidden partition information appears anywhere in prompt.
+  Time: 30 min
+
+Task C2-2.2: Reward Function Bridge (training/reward_fn.py)
+  Goal: Implement reward_fn(completions, prompts, **kwargs) matching TRL/GRPO interface, calls examiner_env reward computation
+  Prompt: [paste-ready — instructs AI to implement the GRPO reward_fn signature expected by TRL, parse completions using action_parser.py, run environment step, return rewards list matching GRPO contract]
+  ⚠️ CRITICAL: reward_fn must call examiner_env/reward.py, not re-implement reward logic. AI will try to inline reward computation. Prevent this explicitly.
+  Sanity: (1) reward_fn returns a list of floats matching completions length. (2) Malformed completion returns penalty value. (3) W&B receives reward from this function.
+  Time: 45 min
+
+Task C2-2.3: Training Script (training/train_grpo.py)
+  Goal: Implement full GRPO training loop using Unsloth + TRL GRPOTrainer
+  Prompt: [paste-ready — instructs AI to use Unsloth for model loading with 4-bit quant, TRL GRPOTrainer with reward_fn, config from training/config.py, W&B logging hooks, eval every N steps on frozen eval suite, checkpoint saving]
+  ⚠️ AI will hallucinate TRL API patterns. Paste current GRPOTrainer interface from TRL docs. Version-pin.
+  Sanity: (1) Training script imports without error on Colab. (2) W&B run initializes and receives episode_reward metric. (3) Training runs 5 steps without crash on DEBUG config.
+  Time: 90 min
+
+Task C2-2.4: DEBUG Smoke Test
+  Goal: Run DEBUG config end-to-end, verify pipeline health
+  Checklist:
+    ✓ 20 episodes complete without crash
+    ✓ R_total finite and within [-2.05, +1.95] for every episode
+    ✓ Reward variance σ(R_total) ∈ [0.05, 1.5] over the 20 episodes
+    ✓ Each per-component reward (R_acc, R_asym, R_cal, R_eff, R_cov, R_info, R_qual, R_div, P_*) logged separately to W&B
+    ✓ Parser failure rate < 0.5
+    ✓ Posterior trace logged for ≥1 episode (for HF Space Tab 1)
+    ✓ Oracle calibration check: outputs/eval/oracle_calibration.json exists, mean Brier ≤ 0.18
+    ✓ Eval suite produces checkpoint_metrics.json at step 0 with all 4 baselines
+    ✓ GRPO advantage normalization actually fires (log A_i mean ≈ 0, std ≈ 1 per group)
+  NOT a requirement: reward improves in 20 episodes. Pipeline health is the only gate here.
+  Time: 75 min (run time + verification)
+
+Task C2-3.1: DEMO Training Run
+  Goal: Run DEMO config (200 episodes, 5 sections, F1+F2 training styles)
+  Expected: Real W&B artifacts, checkpoint_metrics.json every 50 steps, final eval on F3 held-out style and S05 held-out section
+  Gate: outputs/eval/final_metrics.json exists with trained examiner metrics. Training run artifacts in W&B.
+  Time: Depends on hardware — plan 2–3 hours on Colab A100
+
+Task C2-3.2: Transcript Selection (scripts/select_transcripts.py)
+  Goal: Behavior-based selection per section 10 spec
+  Prompt: [paste-ready — instructs AI to: load frozen eval results for DefinitionalExaminer and TrainedExaminer, find episodes where Definitional was wrong and Trained was correct on same seed, select episode with largest diagnostic_score gap, export before_transcript.json and after_transcript.json]
+  Sanity: (1) before_transcript has low diagnostic_score and wrong classification. (2) after_transcript has high diagnostic_score and correct classification. (3) Both use same episode_seed.
+  Time: 30 min
+
+Task C2-3.3: Plot Generation (scripts/generate_plots.py)
+  Goal: Generate all evidence plots from real W&B export or training output logs
+  Plots required:
+    - R_total curve over training steps (with std band from per-eval reward_std)
+    - Per-component reward small-multiples: R_acc, R_info, R_cal, R_qual, R_asym
+    - classification_accuracy curve
+    - false_accusation_rate AND false_exoneration_rate curves (overlaid)
+    - avg_info_gain_per_turn curve
+    - calibration_ECE curve
+    - Comparison bar chart [Random | Definitional | BayesianHeuristic | Trained] on held-out eval suite (accuracy + avg_info_gain + ECE)
+    - Per-style accuracy heatmap (rows: K1/K2/K3/F1/F2/F3/F4, cols: S01–S10)
+    - Posterior-trace example: per-section p_t over turns for one selected episode (best AFTER transcript)
+  ⚠️ CRITICAL: all plots must be derived from real data. No synthetic or mocked plots. MSR-3 blocker.
+  Sanity: (1) Plots render without error. (2) Plot data matches values in outputs/eval/final_metrics.json. (3) Comparison bar chart shows all 4 examiners. (4) Heatmap has no NaN cells.
+  Time: 60 min
+
+Task C2-4.1: HF Space (hf_space/app.py — 4 tabs)
+  Goal: Implement 4-tab Gradio app per section 11 spec
+  Tab 1: Live Episode (user triggers, shows ask→response→classify loop, reveals ground truth)
+  Tab 2: Baseline vs Trained (same seed, 3 examiners side by side, highlights question quality)
+  Tab 3: Training Evidence (real plots from outputs/plots/, real comparison table)
+  Tab 4: Environment Details (style family diagram, action schema, reward breakdown)
+  ⚠️ AI will generate Space configs that fail silently. Test in incognito before submitting. Check Space logs.
+  Sanity: (1) Space loads without error in incognito. (2) Tab 1 runs a full episode. (3) Tab 3 shows real data (not placeholder text).
+  Time: 120 min
+
+Task C2-4.2: Colab Notebook (notebooks/train_examiner.ipynb)
+  Goal: End-to-end runnable notebook — install → setup → DEBUG smoke test → DEMO training → eval → plots
+  ⚠️ CRITICAL: every cell must work on a clean Colab runtime with no local files. AI will generate cells with local path assumptions. Test top-to-bottom.
+  Sanity: (1) Runs top-to-bottom on clean Colab without modification. (2) W&B run initialized. (3) Produces at least one real plot.
+  Time: 45 min
+
+Task C2-5.1: Writeup / Mini-Blog
+  Goal: HuggingFace mini-blog or slide deck — 3-sentence narrative, demo walkthrough, honest caveats, held-out eval table, reward curve
+  Content must include: the 3-sentence narrative verbatim, one screenshot from Tab 2 (Baseline vs Trained), comparison table, reward curve, honest caveat about simulator scope
+  Time: 60 min
+
+What C2 must NOT do:
+  - Implement environment or student simulator (C1 owns)
+  - Use token-overlap for diagnostic score (removed)
+  - Select transcripts by episode index (removed)
+  - Generate mocked or placeholder plots (MSR-3 blocker)
+  - Add video files to HF Hub (MSR-9 violation)
+  - Hardcode hyperparameters outside config.py
+  - Narrate "3 visible training phases" unless genuinely observed in data
+
+════════════════════════════════════════════
+DOCUMENT 6: implementation_validator.md
+════════════════════════════════════════════
+The Validator's complete AI-assisted quality control playbook.
+
+Validator is never idle. Parallel work map per phase:
+  Phase 0: prepare review prompts, pre-check architecture against all 9 MSRs, set up W&B project, create frozen eval suite seeds (eval_config.json)
+  Phase 1: prepare parser test review (verify 8 malformed cases), verify OpenEnv inheritance is correct, check no hidden state leaks into observation, verify student style family has all 7 styles with behavioral differentiation
+  Phase 2: verify reward function exactly matches architecture.md pseudocode (no AI improvisation), verify W&B logging hooks are live (not just print), verify reward_fn.py calls env reward, not re-implements it
+  Phase 3: verify training run is real (W&B artifacts exist, not mocked), validate plots are generated from actual logs (not hardcoded), verify transcript selection is behavior-based (not episode-index based), verify comparison table includes all 3 baselines
+  Phase 4: verify HF Space publicly accessible in incognito, run Colab top-to-bottom as judge on clean runtime, verify all 4 tabs work
+  Phase 5: review writeup/slides from non-technical judge perspective, verify honest caveats are present, verify 3-sentence narrative is verbatim
+
+At every merge gate (for each gate from implementation_plan.md):
+  AI code review prompt (token-optimized, returns structured findings: PASS/FAIL per gate condition)
+  MSR gate check (which MSRs this gate must satisfy — checkbox)
+  Judging criterion impact check (does this merge advance or risk any criterion?)
+  RL-specific manual checks:
+    - OpenEnv base class properly inherited? (MSR-1)
+    - Reward function matches §6.2 pseudocode exactly? (no AI improvisation of weights/bounds)
+    - All 11 RewardBreakdown components present and individually logged to W&B?
+    - R_total within theoretical bounds [-2.05, +1.95] for every episode in DEBUG run?
+    - Reward variance σ(R_total) ∈ [0.05, 1.5] (not collapsed, not exploding)?
+    - Posterior oracle calibration JSON exists with mean Brier ≤ 0.18?
+    - Reward NOT normalized inside environment (raw bounded values returned)?
+    - Posterior oracle never used as accuracy ground truth (only for shaping R_info, R_cal)?
+    - LLR clipped to [-3, +3] per turn?
+    - Action parser has unit tests passing?
+    - Student simulator leak rates within tolerance of §2 specification (behavioral tests)?
+    - Prompt builder has no hidden state leakage (no labels, no styles, no posteriors)?
+    - W&B logging hooks writing to W&B, not just printing? Per-component rewards visible?
+    - Transcript selection is behavior-based (largest R_info gap with correctness flip), not episode-index?
+    - BayesianHeuristicExaminer present in baseline comparison?
+    - Plots derived from real run data?
+    - Colab notebook cells have no local path assumptions?
+    - HF Space Tab 1 shows live posterior trace + per-component reward breakdown?
+    - HF Space tested in incognito?
+
+Gate-specific additional checks:
+  Phase 1 gate: "Run DefinitionalExaminer AND BayesianHeuristicExaminer on frozen eval suite. Definitional > Random in accuracy AND BayesianHeuristic > Definitional in avg_info_gain_per_turn (sanity that eval suite + oracle work). Verify oracle_calibration.json exists with Brier ≤ 0.18."
+  Phase 2 gate: "Run DEBUG smoke test. Verify: R_total finite and within [-2.05, +1.95], σ(R_total) ∈ [0.05, 1.5], all 11 per-component rewards visible in W&B, parse_failure_rate < 0.5, posterior trace logged. Log results. No improvement assertion required."
+  Phase 3 gate: "Open outputs/eval/final_metrics.json. Is trained examiner accuracy higher than DefinitionalExaminer on held-out style? Is avg_info_gain_per_turn ≥ BayesianHeuristicExaminer's? Is ECE ≤ BayesianHeuristicExaminer's ECE? If any of these are negative, document honestly with the per_style_accuracy heatmap — do not discard or hide the result."
+  Phase 4 gate: "Open HF Space in incognito. Run Tab 1 — does live posterior trace render? Are per-component rewards shown? Run Tab 2 — four examiners side-by-side? Open Tab 3 — plots are real, not placeholder, and include per-component reward curves and per-style heatmap?"
+
+Final submission validation sequence (10 minutes max):
+  1. Run full MSR checklist — every checkbox in order
+  2. For each judging criterion: what is our strongest evidence artifact?
+     ENV_INNOV: multi-style simulator + hidden-state diagnostic RL (novel claim defended in architecture.md)
+     STORYTELLING: 3-sentence narrative in README + Tab 2 side-by-side demo + writeup
+     REWARD_EVIDENCE: comparison table + reward curve + behavior-selected before/after transcripts
+     PIPELINE: coherent reward pseudocode in architecture.md + working Colab notebook
+  3. Open HF Space incognito — live? Tab 1 runs? (MSR-5)
+  4. Run Colab top-to-bottom on clean runtime — completes? (MSR-2)
+  5. Open README — all 9 MSR links present and working? (MSR-6, MSR-7, MSR-8)
+  6. Check HF Hub repo — any video files? (MSR-9)
+  7. Read/watch writeup — under 2 min? Non-technical audience can follow? Honest caveats present? (MSR-4)
+  8. View reward/loss plots — real run? Show non-trivial reward distribution? (MSR-3)
+  9. Verify comparison table shows DefinitionalExaminer vs TrainedExaminer (not just random)
+  10. All 3 team members confirm → submit
+
+Bug severity:
+  🔴 Blocker: breaks MSR or judging criterion (no merge)
+  🟡 Degraded: works but sub-optimal (merge with logged issue)
+  🟢 Minor: cosmetic (merge)
+
+"Second AI Opinion" protocol: when reward logic is disputed, when OpenEnv integration is uncertain, or when training results look anomalous — run through a second model and reconcile before proceeding.
+
+════════════════════════════════════════════
+DOCUMENT 7: mistakes.md
+════════════════════════════════════════════
+Living AI session error log — institutional memory.
+
+Pre-filled header: The Examiner | Hackathon | Submission deadline: [fill]
+
+Pre-session ritual prompt (token-optimized, includes current MSR status as negative constraints):
+  "Project: The Examiner. An RL environment where an examiner learns diagnostic questioning to distinguish KNOWS from FAKING students across a multi-style simulator family. Key constraints: [list current open MSRs]. Do not: [list active violations from mistakes index]. Current phase: [X]. Your task: [specific task for this session]."
+
+Recurring Mistakes Index (pre-populated with known RL/OpenEnv patterns and new architecture-specific patterns):
+
+HALLUCINATION | AI reimplements OpenEnv base classes instead of inheriting | Phase 1 | 🔴 | MSR-1
+HALLUCINATION | AI generates single fake student instead of 7-style family | Phase 1 | 🔴 | ENV_INNOV
+HALLUCINATION | AI ignores leak rates and produces uniformly-scripted student responses | Phase 1 | 🔴 | ENV_INNOV
+HALLUCINATION | AI uses token-overlap divergence as diagnostic score | Phase 1 | 🔴 | ENV_INNOV (removed feature)
+HALLUCINATION | AI adds "abstain" or "uncertain" to Classify action | Phase 1 | 🔴 | REWARD_LOGIC_ERROR
+HALLUCINATION | AI selects transcripts by episode index instead of behavior quality | Phase 3 | 🔴 | STORYTELLING
+HALLUCINATION | AI adds LLM judge to reward computation | Phase 2 | 🔴 | REWARD_LOGIC_ERROR (non-deterministic)
+HALLUCINATION | AI uses posterior oracle as ground truth for accuracy grading | Phase 2 | 🔴 | REWARD_LOGIC_ERROR
+HALLUCINATION | AI normalizes / z-scores reward inside the environment | Phase 2 | 🔴 | GRPO_BREAK (corrupts advantage)
+HALLUCINATION | AI improvises reward weights instead of using §6.2 verbatim | Phase 2 | 🔴 | REWARD_LOGIC_ERROR
+HALLUCINATION | AI forgets to clip LLR to [-3, +3] (causes posterior explosion on outlier responses) | Phase 1 | 🔴 | REWARD_LOGIC_ERROR
+HALLUCINATION | AI implements R_qual using student_response (response-side, gameable) instead of question-side only | Phase 1 | 🔴 | REWARD_HACK_VECTOR
+HALLUCINATION | AI uses non-potential-based dense shaping for diagnostic signal | Phase 2 | 🔴 | THEORY_VIOLATION (biases optimal policy)
+HALLUCINATION | AI omits per-component reward logging (only logs R_total) | Phase 2 | 🟡 | DEBUGGABILITY
+HALLUCINATION | AI skips oracle calibration step before training | Phase 1 | 🔴 | REWARD_SIGNAL_DEGRADED
+HALLUCINATION | AI adds adaptive difficulty logic | any | 🟡 | SCOPE_DRIFT (removed feature)
+HALLUCINATION | AI narrates "3 visible training phases" without data | Phase 5 | 🟡 | STORYTELLING
+HALLUCINATION | AI inlines reward logic in reward_fn.py instead of calling reward.py | Phase 2 | 🔴 | INTEGRATION_BREAK
+HALLUCINATION | AI generates mocked training plots | Phase 3 | 🔴 | MSR-3 (immediate blocker)
+HALLUCINATION | AI generates Colab cells with local path assumptions | Phase 4 | 🔴 | MSR-2
+HALLUCINATION | AI adds video files to HF Hub | Phase 4 | 🔴 | MSR-9
+HALLUCINATION | AI expands action space beyond Ask/Classify | Phase 1 | 🟡 | SCOPE_DRIFT
+HALLUCINATION | AI hardcodes hyperparameters outside config.py | Phase 2 | 🟡 | CODE_QUALITY
+HALLUCINATION | AI leaks hidden partition info / posterior into examiner prompt | Phase 2 | 🔴 | ENV_INTEGRITY
+HALLUCINATION | AI omits BayesianHeuristicExaminer from baseline comparison | Phase 3 | 🟡 | CREDIBILITY (weakens REWARD_EVIDENCE)
+WRONG_VERSION | TRL GRPOTrainer API mismatch | Phase 2 | 🟡 | MSR-2
+WRONG_VERSION | HuggingFace push_to_hub deprecation | Phase 4 | 🟡 | MSR-5
+SILENT_FAILURE | W&B logging appears to work but metrics not logged | Phase 2 | 🔴 | MSR-3
+SILENT_FAILURE | HF Space config invalid but no runtime error | Phase 4 | 🔴 | MSR-5
+SILENT_FAILURE | Parser silently coerces malformed JSON instead of returning MalformedAction | Phase 1 | 🔴 | REWARD_LOGIC_ERROR
+SILENT_FAILURE | Posterior trace not populated (HF Space Tab 1 silently empty) | Phase 4 | 🔴 | STORYTELLING
+SILENT_FAILURE | Reward variance collapses to 0 mid-training (degenerate policy, not detected) | Phase 3 | 🔴 | MSR-3
+REWARD_LOGIC_ERROR | Reward returns constant value (environment appears to train but doesn't) | Phase 2 | 🔴 | MSR-3
+REWARD_LOGIC_ERROR | R_total exceeds theoretical bounds [-2.05, +1.95] (indicates double-count or sign bug) | Phase 2 | 🔴 | MSR-3
+
+Per-session log template: Session # | Date | Phase | MSR at risk | Judging criterion impacted | Mistake description | Corrected prompt that worked | Resolution confirmed by Validator
+
+════════════════════════════════════════════
+DOCUMENT 8: merge_procedure.md
+════════════════════════════════════════════
+Zero-ambiguity Git collaboration protocol for a vibe coding team of 3.
+
+Branch map (Mermaid):
+  main — always deployable, always MSR-compliant
+  feat/c1-[stage-id]-[feature]
+  feat/c2-[stage-id]-[feature]
+  validate/phase-[n]-[date]
+
+Merge gate schedule tied to implementation plan phases (from Document 3). Each gate with trigger condition and MSRs it must verify.
+
+Complete merge procedure (10 steps, no ambiguity):
+1. Feature branch passes local sanity checks (3 conditions from task definition)
+2. Open PR → assign Validator as reviewer
+3. Validator runs AI code review prompt
+4. Validator runs gate-specific MSR checks
+5. Validator runs RL-specific manual checks for this gate
+6. Any 🔴 finding blocks merge — fix required, re-review
+7. Any 🟡 finding logged in mistakes.md — merge proceeds with note
+8. Validator approves PR
+9. Squash merge to main with structured commit message
+10. All 3 team members pull latest main
+
+Commit message format:
+  [type] C1|C2|VAL | phase-[n]-stage-[id] | [feature] | [AI tool] | MSR:[n,n] | [PASS/FAIL sanity]
+  Types: feat, fix, integrate, validate, docs, config, train, deploy
+
+HuggingFace-specific sync:
+  HF Space pushes separate from GitHub commits
+  C2 owns HF Space pushes
+  Must pass Validator gate before any HF Space push (MSR-5 integrity)
+  HF Hub model pushes: C2 owns, after Phase 3 gate cleared
+
+Prohibited actions:
+  - Direct commits to main
+  - Force push
+  - Generating code outside owned files without Validator approval
+  - Pushing to HF Space without Validator gate clearance
+  - Committing video files to HF Hub
+
+════════════════════════════════════════════
+DOCUMENT 9: project_structure.md
+════════════════════════════════════════════
+Complete folder/file tree annotated with: file purpose | owning coder | feature served | MSR satisfied | judging criterion served.
+
+Derive exact tree from section 13 (file ownership map). Every file must have all 5 annotation fields. This document is locked after Phase 0 — no new files without Validator approval.
+
+════════════════════════════════════════════
+DOCUMENT 10: README.md (template)
+════════════════════════════════════════════
+Hackathon-optimized. Judges find what they need in under 60 seconds.
+
+Structure:
+  # The Examiner — Can an AI Learn to Expose Bluffing?
+  
+  [3-sentence narrative from PROJECT IDENTITY — verbatim]
+  
+  🔗 [HuggingFace Space](link) | 📊 [Training Blog](link) | 📓 [Colab Notebook](link)
+  
+  ## The Problem
+  [honest problem statement — 2 paragraphs, no overclaiming]
+  
+  ## How The Environment Works
+  [student simulator family diagram or table, action space JSON examples, episode flow diagram]
+  
+  ## What The Agent Learns
+  [comparison table: RandomExaminer | DefinitionalExaminer | TrainedExaminer × accuracy | false_accusation_rate | diagnostic_score]
+  [reward curve image from real training run]
+  [before/after transcript excerpts (2–3 turns each, behavior-selected)]
+  
+  ## Honest Caveats
+  [both caveats from PROJECT IDENTITY section, verbatim]
+  
+  ## Tech Stack
+  [table: Component | Technology | Version]
+  
+  ## Setup & Reproduction
+  [exact commands to run Colab notebook, install requirements, run eval suite]
+  
+  ## Links
+  - HuggingFace Space: [MSR-7]
+  - Training Blog/Writeup: [MSR-8]
+  - Colab Notebook: [MSR-8]
+  - W&B Training Run: [MSR-8]
+  
+  No video files in this repository. [MSR-9]
+
+════════════════════════════════════════════
+DOCUMENT 11: context_primer.md
+════════════════════════════════════════════
+Ultra-compact (target: under 250 tokens). Paste into AI at every session start.
+
+PROJECT: The Examiner (BluffBuster) — RL env where examiner agent learns to ask information-maximizing diagnostic questions distinguishing KNOWS vs FAKING students across a 7-style adversarial simulator with parametrized leak rates. Reward = R_acc + R_asym + R_cal + R_eff + R_cov + R_info + R_qual + R_div + penalties; bounds [-2.05, +1.95]; potential-based info-gain shaping over a KB-grounded posterior.
+
+STACK: OpenEnv (latest) | Unsloth + TRL GRPO | Qwen2.5-7B | W&B | Gradio | HuggingFace | Pydantic v2
+
+C1 OWNS: examiner_env/ (all files incl. posterior_oracle.py, calibration.py) | tests/ (all files)
+C2 OWNS: training/ | scripts/ | hf_space/ | notebooks/ | outputs/
+
+CURRENT PHASE: [fill each session]
+OPEN MSRs: [fill each session]
+
+DO NOT: use token-overlap divergence | add LLM judge to reward | normalize reward inside env | use posterior oracle as accuracy ground truth | improvise reward weights (§6.2 verbatim) | use response-side R_qual | omit per-component reward logging | skip oracle calibration | omit BayesianHeuristicExaminer baseline | select transcripts by episode index | add abstain to Classify | leak hidden state/posterior into examiner prompt | use loose text parsing | add adaptive difficulty | hardcode hyperparameters | generate mocked plots | add video files to HF Hub
+
+SEE guardrails.md for all constraints. SEE §6 of Base prompt for canonical reward pseudocode.
+
+════════════════════════════════════════════
+DOCUMENT 12: submission_checklist.md
+════════════════════════════════════════════
+Standalone, printable, completable in under 10 minutes. The last thing Validator runs before submit.
+
+MSR CHECKLIST:
+[ ] MSR-1 | OpenEnv base class inherited (not reimplemented) | Verify: grep "class ExaminerEnv" environment.py confirms inheritance from OpenEnv class | Owner: C1 | Phase: 1
+[ ] MSR-2 | Colab notebook runs top-to-bottom on clean runtime | Verify: Validator ran it fresh on clean Colab session | Owner: C2 | Phase: 4
+[ ] MSR-3 | Real loss/reward plots from actual training run | Verify: plots match W&B run ID logged in outputs/plots/README.md | Owner: C2 | Phase: 3
+[ ] MSR-4 | Writeup/blog/slides published and linked | Verify: URL accessible without login | Owner: All | Phase: 5
+[ ] MSR-5 | HF Space live in incognito | Verify: open HF Space URL in incognito, all 4 tabs load | Owner: C2 | Phase: 4
+[ ] MSR-6 | README complete (problem + env + results) | Verify: all 6 README sections present, comparison table populated | Owner: All | Phase: 4
+[ ] MSR-7 | README links to HF Space | Verify: link works in incognito | Owner: All | Phase: 4
+[ ] MSR-8 | README links to all materials | Verify: blog/writeup link + Colab link + W&B link all accessible | Owner: All | Phase: 5
+[ ] MSR-9 | No video files in HF Hub | Verify: git ls-files | grep -E ".mp4|.mov|.avi|.mkv" returns empty | Owner: C2 | Phase: 4
+
+JUDGING CRITERIA EVIDENCE CHECKLIST:
+[ ] ENV_INNOV (40%) | Evidence: architecture.md documents 7-style simulator family with parametrized leak rates + KB-grounded posterior oracle + information-gain reward shaping. HF Space Tab 4 shows environment details + reward decomposition. Pitch claim is specific, defensible, and theoretically grounded (potential-based shaping cited).
+[ ] STORYTELLING (30%) | Evidence: 3-sentence narrative appears verbatim in README, HF Space description, and writeup. Tab 1 shows live posterior trace (the "doctor's confidence dial"). Tab 2 shows 4 examiners side-by-side. Writeup/video is non-technical-audience ready.
+[ ] REWARD_EVIDENCE (20%) | Evidence: comparison table [Random|Definitional|BayesianHeuristic|Trained] on held-out eval suite exists and shows trained beats Definitional in accuracy AND beats BayesianHeuristic in avg_info_gain_per_turn. Per-component reward curves from real W&B run. Behavior-selected transcripts include posterior traces. Calibration ECE reported.
+[ ] PIPELINE (10%) | Evidence: reward pseudocode in architecture.md (§6.2) matches code in reward.py exactly. All 11 components logged separately to W&B. R_total within theoretical bounds. σ(R) within configured floor/ceiling. Colab runs without error.
+
+SCIENTIFIC HONESTY FINAL CHECK:
+[ ] Honest caveats appear in README (simulator scope + oracle is surrogate, not truth)
+[ ] Trained examiner improvement is on HELD-OUT styles/sections (not training distribution)
+[ ] Plots are derived from real run data (not generated or hardcoded)
+[ ] Transcripts selected by behavioral quality (not episode index)
+[ ] Comparison uses DefinitionalExaminer as primary baseline AND BayesianHeuristicExaminer as harder credibility baseline
+[ ] Per-style accuracy heatmap published — worst (style, section) cell disclosed honestly
+[ ] Calibration ECE reported alongside accuracy (no accuracy-only narrative)
+
+─────────────────────────────────────────────
+⚠️ GLOBAL CONSTRAINTS ACROSS ALL GENERATED DOCUMENTS
+─────────────────────────────────────────────
+
+1. Every document must be fully internally consistent with every other document. No contradictions between files.
+
+2. Every AI prompt must be paste-ready and token-optimized. No preambles, no pleasantries. Shortest complete prompt that produces correct output.
+
+3. Every removed feature (section 12) must be completely absent from all generated documents. Not mentioned, not referenced, not prompted.
+
+4. Judging criteria are the primary design constraint. ENV_INNOV (40%) + STORYTELLING (30%) dominate. Every decision evaluated through this lens.
+
+5. MSRs are binary. Partial compliance is non-compliance. Every MSR is a merge blocker and submission blocker.
+
+6. File ownership is absolute. No cross-ownership AI generation. Quarantine everything outside owned files.
+
+7. The training run is real or it does not count. No mocked plots, no placeholder rewards, no "we'll run it later." MSR-3 is a hard gate.
+
+8. Scientific honesty is non-negotiable. If results do not show expected improvement, document honestly. Do not cherry-pick or fabricate.
+
+9. guardrails.md is supreme. In any conflict between documents, guardrails.md wins.
+
+10. The NEW architecture (this prompt) supersedes any prior planning documents. If you have seen any prior version of this project's planning documents, discard them entirely. This prompt is the sole source of truth.
+
+─────────────────────────────────────────────
+BEGIN GENERATION. Output all 12 documents in order.
+─────────────────────────────────────────────
