@@ -746,6 +746,15 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         tokenizer.model_max_length = int(config.max_seq_length)
     except Exception:
         pass
+    # Qwen defaults ship max_length=32768 on generation_config; combined with
+    # max_new_tokens elsewhere that triggers noisy "Both max_new_tokens and
+    # max_length" warnings. Prefer unconstrained max_length when using new tokens.
+    try:
+        _gc = getattr(model, "generation_config", None)
+        if _gc is not None and hasattr(_gc, "max_length"):
+            _gc.max_length = None
+    except Exception:
+        pass
     print("Model loaded with LoRA adapters.")
 
     # ── Episode seed dataset ───────────────────────────────────────────────
@@ -770,7 +779,8 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     current_beta_kl = config.beta_kl
     checkpoint_metrics_log: dict = {}
     train_started_at = time.time()
-    total_steps_estimate = config.num_episodes
+    # Optimizer steps per epoch (what tqdm / max_steps actually use).
+    total_steps_estimate = max(1, (n + config.batch_size - 1) // config.batch_size)
 
     class EvalAndMonitorCallback(TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kw):
@@ -828,6 +838,9 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                     print("  " + "  ".join(stats), flush=True)
                 print("  " + timing, flush=True)
 
+                # Do not pass step= — TRL/Unsloth already advances wandb steps at a
+                # different rate; forcing trainer global_step causes "step 24 < 335"
+                # drops and missing curves.
                 if _WANDB_AVAILABLE and wandb.run:
                     wandb.log({
                         "training/current_step": step,
@@ -836,7 +849,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                         "training/elapsed_minutes": elapsed_min,
                         "training/eta_minutes": eta_min,
                         "training/sec_per_step": sec_per_step,
-                    }, step=step)
+                    })
 
         def on_step_end(self, args, state, control, **kw):
             nonlocal current_beta_kl
@@ -880,7 +893,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                         "eval/avg_info_gain": chk["avg_info_gain_per_turn"],
                         "eval/calibration_ECE": chk["calibration_ECE"],
                         "eval/false_accusation_rate": chk["false_accusation_rate"],
-                    }, step=step)
+                    })
                 print(f"  accuracy={chk['classification_accuracy']:.3f} "
                       f"info_gain={chk['avg_info_gain_per_turn']:.4f} "
                       f"ECE={chk['calibration_ECE']:.4f}")
@@ -913,7 +926,8 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         logging_steps=1,
         report_to="wandb" if _WANDB_AVAILABLE else "none",
         max_completion_length=config.max_seq_length,
-        log_completions=True,
+        # Huge completion tables + duplicate "max_new_tokens" log noise on Spaces.
+        log_completions=(config.config_name == "FULL"),
     )
 
     # ── GRPOTrainer (standard GRPO — no environment_factory) ─────────────
@@ -1042,9 +1056,14 @@ class _TrainedExaminerWrapper:
         pass
 
     def act(self, observation: dict) -> str:
+        from copy import deepcopy
+
         from training.prompt_builder import build_prompt
+        from transformers import GenerationConfig
+
         tok = self.__class__.tokenizer
         cfg = self.__class__.config
+        model = self.__class__.model
         max_new = 256
         # Reserve room for generation: cap prompt at (max_seq_length - max_new).
         max_prompt_tokens = max(64, int(cfg.max_seq_length) - max_new)
@@ -1054,13 +1073,15 @@ class _TrainedExaminerWrapper:
             return_tensors="pt",
             truncation=True,
             max_length=max_prompt_tokens,
-        ).to(self.__class__.model.device)
-        outputs = self.__class__.model.generate(
-            **inputs,
-            max_new_tokens=max_new,
-            do_sample=False,
-            pad_token_id=tok.eos_token_id,
-        )
+        ).to(model.device)
+        _base = getattr(model, "generation_config", None)
+        _gc = deepcopy(_base) if _base is not None else GenerationConfig()
+        _gc.max_new_tokens = max_new
+        _gc.do_sample = False
+        _gc.pad_token_id = tok.eos_token_id
+        if hasattr(_gc, "max_length"):
+            _gc.max_length = None
+        outputs = model.generate(**inputs, generation_config=_gc)
         generated = outputs[0][inputs["input_ids"].shape[1]:]
         return tok.decode(generated, skip_special_tokens=True).strip()
 

@@ -85,9 +85,10 @@ DEMO_CONFIG = TrainingConfig(
     config_name="DEMO",
     sections=["S01", "S02", "S03", "S04", "S05"],
     max_turns=4,
-    # Time-constrained submission DEMO: 100 steps.
-    # Enough to give a real training trend (4 eval points at 25/50/75/100)
-    # while staying short on A100. FULL is the primary run.
+    # Time-constrained submission DEMO: 100 episodes (~50 optimizer steps with
+    # batch_size=2). Mid-training run_eval() was freezing Spaces for tens of
+    # minutes (50 eval episodes × generate); checkpoint curve is optional.
+    # Final held-out eval still runs once at the end of train().
     num_episodes=100,
     fake_styles_train=["F1", "F2"],
     eval_styles_held_out=["F3"],
@@ -110,7 +111,8 @@ DEMO_CONFIG = TrainingConfig(
     max_grad_norm=1.0,
     warmup_ratio=0.05,
     checkpoint_every_n_steps=25,
-    eval_every_n_steps=25,
+    # Skip mid-training eval on HF (set >> num_episodes so callback never fires).
+    eval_every_n_steps=10_000,
 )
 
 # ──────────────────────────────────────────────────────────
