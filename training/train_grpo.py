@@ -627,14 +627,15 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         load_in_4bit=config.use_4bit,
         dtype=None,
     )
+    # Restrict LoRA to attention projections only.
+    # Including gate_proj/up_proj/down_proj triggers Unsloth's fused
+    # apply_lora_mlp_swiglu Triton kernel, which has a bf16/fp32 dtype
+    # mismatch bug under gradient checkpointing in Unsloth 2026.4.x.
     model = FastLanguageModel.get_peft_model(
         model,
         r=config.lora_rank,
         lora_alpha=config.lora_alpha,
-        target_modules=[
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
-        ],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_dropout=0.0,
         bias="none",
         use_gradient_checkpointing="unsloth",
