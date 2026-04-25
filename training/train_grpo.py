@@ -358,28 +358,54 @@ def _install_matmul_lora_patch() -> bool:
 
     _fdq = getattr(_uu, "fast_dequantize", None)
 
+    def _is_float_tensor(t) -> bool:
+        """Return True only for genuine floating-point torch.Tensors."""
+        return (
+            isinstance(t, torch.Tensor)
+            and t.is_floating_point()
+            and t.dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64)
+        )
+
+    def _dequant(W_quant):
+        """
+        Return a genuine float tensor from W_quant.
+        Tries (1) Unsloth fast_dequantize, (2) bitsandbytes dequantize_4bit.
+        Returns None if all attempts fail.
+        bitsandbytes Params4bit.to() is in-place and returns None, so we guard
+        with isinstance checks before accepting any result.
+        """
+        # Strategy 1 — Unsloth fast_dequantize
+        if _fdq is not None:
+            try:
+                result = _fdq(W_quant)
+                if _is_float_tensor(result):
+                    return result
+            except Exception:
+                pass
+
+        # Strategy 2 — bitsandbytes dequantize_4bit
+        if hasattr(W_quant, "quant_state"):
+            try:
+                import bitsandbytes.functional as _bnb
+                raw = W_quant.data if hasattr(W_quant, "data") else W_quant
+                result = _bnb.dequantize_4bit(raw, W_quant.quant_state)
+                if _is_float_tensor(result):
+                    return result
+            except Exception:
+                pass
+
+        return None
+
     def _safe_matmul_lora(X, W, W_quant, A, B, s, out=None):
         dtype = X.dtype  # authoritative compute dtype from activations
 
-        # ── Dequantize base weight ──────────────────────────────────────────
+        # ── Dequantize / locate base weight ────────────────────────────────
         W_fp = None
         if W_quant is not None:
-            if _fdq is not None:
-                try:
-                    W_fp = _fdq(W_quant)
-                except Exception:
-                    pass
-            if W_fp is None:
-                try:
-                    import bitsandbytes.functional as _bnb
-                    W_fp = _bnb.dequantize_4bit(
-                        W_quant.data, W_quant.quant_state
-                    )
-                except Exception:
-                    pass
-            if W_fp is None and W is not None:
+            W_fp = _dequant(W_quant)
+            if W_fp is None and _is_float_tensor(W):
                 W_fp = W
-        else:
+        elif _is_float_tensor(W):
             W_fp = W
 
         # ── Base forward ────────────────────────────────────────────────────
@@ -394,8 +420,8 @@ def _install_matmul_lora_patch() -> bool:
 
         # ── LoRA delta: (X @ A^T) @ B^T * s ────────────────────────────────
         if A is not None and B is not None:
-            XA = F.linear(X, A.to(dtype))           # (…, r)
-            base = base + float(s) * F.linear(XA, B.to(dtype))  # (…, out)
+            XA = F.linear(X, A.to(dtype))
+            base = base + float(s) * F.linear(XA, B.to(dtype))
 
         return base
 
