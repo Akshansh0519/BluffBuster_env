@@ -122,15 +122,15 @@ def test_wrong_label_case_returns_malformed():
 # Test 7: partial classify (only 5 of 10 sections)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_partial_classify_returns_malformed():
+def test_partial_classify_with_invalid_section_returns_malformed():
+    """Classify with an invalid section key (S99) must be MalformedAction."""
     payload = json.dumps({
         "action_type": "classify",
-        "classifications": {"S01": "KNOWS", "S02": "FAKING", "S03": "KNOWS",
-                            "S04": "FAKING", "S05": "KNOWS"},
+        "classifications": {"S01": "KNOWS", "S99": "FAKING"},
     })
     result = parse(payload)
     assert isinstance(result, MalformedAction), (
-        "Classify with only 5 sections must be MalformedAction"
+        "Classify with invalid section S99 must be MalformedAction"
     )
 
 

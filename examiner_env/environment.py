@@ -17,20 +17,27 @@ import random
 from typing import Any
 
 # ── OpenEnv / Gymnasium base class resolution ──────────────────────────────
+openenv = None  # type: ignore[assignment]
+_USE_OPENENV = False
+_BaseEnv = None  # type: ignore[assignment]
+
 try:
+    from openenv.env import Env as _BaseEnv  # type: ignore
     import openenv  # type: ignore
-    _BaseEnv = openenv.Env
     _USE_OPENENV = True
-except ImportError:
+except (ImportError, AttributeError):
+    pass
+
+if _BaseEnv is None:
     try:
         import gymnasium as gym  # type: ignore
-        _BaseEnv = gym.Env
+        _BaseEnv = gym.Env  # type: ignore
     except ImportError:
-        class _BaseEnv:  # minimal shim so the rest of the module is importable
+        class _BaseEnv:  # type: ignore[no-redef]
+            """Minimal shim when neither openenv nor gymnasium is installed."""
             metadata: dict = {}
             def reset(self, *a, **kw): raise NotImplementedError
             def step(self, *a, **kw): raise NotImplementedError
-    _USE_OPENENV = False
 
 from examiner_env.action_parser import parse, validate
 from examiner_env.knowledge_base import KB, build_kb
@@ -80,6 +87,7 @@ class ExaminerEnv(_BaseEnv):
         section_ids: list[str] | None = None,
         max_turns: int = 4,
         kb: dict | None = None,
+        config: Any = None,      # accepts TrainingConfig or None — C2 compatibility
     ) -> None:
         super().__init__()
         self.section_ids = section_ids or CANONICAL_SECTIONS
@@ -264,6 +272,11 @@ class ExaminerEnv(_BaseEnv):
 
         obs = self._build_observation()
         info = breakdown.as_dict()
+        # Expose episode ground truth in info (NOT in obs — guardrail compliant)
+        info["true_labels"] = dict(state.true_labels)
+        info["classifications"] = dict(classifications)
+        info["style_assignments"] = dict(state.style_assignments)
+        info["reward_breakdown"] = breakdown   # raw dataclass for eval.py
         return obs, breakdown.R_total, True, truncated, info
 
 

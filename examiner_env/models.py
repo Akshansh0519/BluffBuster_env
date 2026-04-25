@@ -60,16 +60,17 @@ class ClassifyAction(BaseModel):
     classifications: dict[str, Literal["KNOWS", "FAKING"]]
 
     @model_validator(mode="after")
-    def check_all_sections_present(self) -> "ClassifyAction":
+    def check_all_sections_valid(self) -> "ClassifyAction":
+        """All provided section keys must be canonical; at least 1 required."""
         provided = set(self.classifications.keys())
-        required = CANONICAL_SECTIONS_SET
-        if provided != required:
-            missing = required - provided
-            extra = provided - required
+        invalid = provided - CANONICAL_SECTIONS_SET
+        if invalid:
             raise ValueError(
-                f"classifications must contain exactly all 10 canonical sections. "
-                f"Missing: {sorted(missing)}, Extra: {sorted(extra)}"
+                f"classifications contains invalid section IDs: {sorted(invalid)}. "
+                f"Valid sections: {CANONICAL_SECTIONS}"
             )
+        if not provided:
+            raise ValueError("classifications must not be empty")
         return self
 
 

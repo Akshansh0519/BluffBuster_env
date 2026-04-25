@@ -2,7 +2,9 @@
 baselines.py — Three reference examiners for evaluation comparison.
 
 All three implement the same interface:
-    examiner.act(observation: dict) -> dict (raw action dict, not JSON string)
+    examiner.act(observation: dict) -> str (JSON string, same as TrainedExaminer)
+
+This matches the env.step() contract: env.step() always receives a raw JSON string.
 
 Observation schema:
     {
@@ -13,9 +15,9 @@ Observation schema:
       "dialogue_history": list[dict],   # [{section_id, question, response}, ...]
     }
 
-Return schema:
-    Ask:      {"action_type": "ask", "section_id": ..., "question_text": ...}
-    Classify: {"action_type": "classify", "classifications": {s: "KNOWS"|"FAKING", ...}}
+Return schema (JSON string):
+    Ask:      '{"action_type": "ask", "section_id": "...", "question_text": "..."}'
+    Classify: '{"action_type": "classify", "classifications": {"S01": "KNOWS", ...}}'
 """
 from __future__ import annotations
 
@@ -36,10 +38,10 @@ class RandomExaminer:
     def __init__(self, seed: int = 0) -> None:
         self._rng = random.Random(seed)
 
-    def reset(self) -> None:
+    def reset(self, section_ids: list[str] | None = None) -> None:
         pass
 
-    def act(self, observation: dict) -> dict:
+    def act(self, observation: dict) -> str:
         section_ids: list[str] = observation.get(
             "section_ids", list(observation.get("section_titles", {}).keys())
         )
@@ -49,21 +51,21 @@ class RandomExaminer:
 
         # Classify at the midpoint or on the last turn
         if remaining <= 1 or turn >= max(1, max_turns // 2):
-            return {
+            return json.dumps({
                 "action_type": "classify",
                 "classifications": {
                     s: self._rng.choice(["KNOWS", "FAKING"]) for s in section_ids
                 },
-            }
+            })
 
         section_id = self._rng.choice(section_ids)
         section_kb = KB[section_id]
         probe = self._rng.choice(section_kb.probe_templates)
-        return {
+        return json.dumps({
             "action_type": "ask",
             "section_id": section_id,
             "question_text": probe.template,
-        }
+        })
 
 
 class DefinitionalExaminer:
@@ -78,11 +80,11 @@ class DefinitionalExaminer:
         self._response_lengths: dict[str, int] = {}
         self._asked_order: list[str] = []
 
-    def reset(self) -> None:
+    def reset(self, section_ids: list[str] | None = None) -> None:
         self._response_lengths = {}
         self._asked_order = []
 
-    def act(self, observation: dict) -> dict:
+    def act(self, observation: dict) -> str:
         section_titles: dict = observation.get("section_titles", {})
         section_ids: list[str] = observation.get(
             "section_ids", list(section_titles.keys())
@@ -102,13 +104,9 @@ class DefinitionalExaminer:
 
         # Classify if no more unasked sections or last turn
         if not remaining_unasked or remaining <= 1:
-            # Threshold: median response word count
             lengths = list(self._response_lengths.values())
-            if lengths:
-                threshold = sorted(lengths)[len(lengths) // 2]
-            else:
-                threshold = 20  # default word count threshold
-            return {
+            threshold = sorted(lengths)[len(lengths) // 2] if lengths else 20
+            return json.dumps({
                 "action_type": "classify",
                 "classifications": {
                     s: "KNOWS"
@@ -116,16 +114,16 @@ class DefinitionalExaminer:
                     else "FAKING"
                     for s in section_ids
                 },
-            }
+            })
 
         # Ask definitional question for next section
         target = remaining_unasked[0]
         title = section_titles.get(target, target)
-        return {
+        return json.dumps({
             "action_type": "ask",
             "section_id": target,
             "question_text": f"What is {title}?",
-        }
+        })
 
 
 class BayesianHeuristicExaminer:
@@ -155,7 +153,7 @@ class BayesianHeuristicExaminer:
         """Call after receiving a student response to update posteriors."""
         self._tracker.update(section_id, response, self._kb)
 
-    def act(self, observation: dict) -> dict:
+    def act(self, observation: dict) -> str:
         section_ids: list[str] = observation.get(
             "section_ids", list(observation.get("section_titles", {}).keys())
         )
@@ -179,13 +177,13 @@ class BayesianHeuristicExaminer:
         )
 
         if remaining <= 1 or all_confident:
-            return {
+            return json.dumps({
                 "action_type": "classify",
                 "classifications": {
                     s: "KNOWS" if posteriors.get(s, 0.5) > 0.5 else "FAKING"
                     for s in section_ids
                 },
-            }
+            })
 
         # Find highest-uncertainty section (closest to 0.5) among under-explored
         uncertain_sections = [
@@ -210,11 +208,8 @@ class BayesianHeuristicExaminer:
         matching = [p for p in section_kb.probe_templates if p.probe_type == desired_probe_type]
         probe = matching[0] if matching else section_kb.probe_templates[0]
 
-        return {
+        return json.dumps({
             "action_type": "ask",
             "section_id": target,
             "question_text": probe.template,
-        }
-
-    def to_json_string(self, action_dict: dict) -> str:
-        return json.dumps(action_dict)
+        })

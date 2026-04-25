@@ -1,12 +1,12 @@
-"""
-calibration.py — Oracle calibration for the KB-grounded posterior.
+﻿"""
+calibration.py â€” Oracle calibration for the KB-grounded posterior.
 
-Runs 200 synthetic episodes to find optimal (α, β, γ) per section.
+Runs 200 synthetic episodes to find optimal (Î±, Î², Î³) per section.
 Saves result to outputs/eval/oracle_calibration.json.
 
 ASSERT conditions:
-  - mean_brier ≤ 0.18
-  - terminal_accuracy ≥ 0.75
+  - mean_brier â‰¤ 0.18
+  - terminal_accuracy â‰¥ 0.75
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def _run_single_calibration(
     base_seed: int = 0,
 ) -> tuple[float, float]:
     """
-    Run n_episodes episodes with given (α, β, γ) and return (mean_brier, terminal_accuracy).
+    Run n_episodes episodes with given (Î±, Î², Î³) and return (mean_brier, terminal_accuracy).
     """
     section_ids = list(kb.keys())
     total_brier = 0.0
@@ -76,7 +76,7 @@ def _run_single_calibration(
                     turn=t_idx,
                 )
 
-                # Override α/γ in evidence weights temporarily
+                # Override Î±/Î³ in evidence weights temporarily
                 original_weights = section_kb.evidence_weights.copy()
                 section_kb.evidence_weights["alpha"] = alpha
                 section_kb.evidence_weights["gamma"] = gamma
@@ -107,7 +107,7 @@ def run_calibration(
     output_path: str = "outputs/eval/oracle_calibration.json",
 ) -> dict:
     """
-    Calibrate (α, β, γ) on a synthetic held-out split.
+    Calibrate (Î±, Î², Î³) on a synthetic held-out split.
 
     Steps:
       1. Run 200 episodes with default weights.
@@ -120,23 +120,23 @@ def run_calibration(
     if kb is None:
         kb = build_kb()
 
-    # ── Step 1: evaluate defaults ──────────────────────────────────────────
+    # â”€â”€ Step 1: evaluate defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     default_alpha = 1.5
     default_beta = 0.5
     default_gamma = 1.0
 
     print(f"[calibration] Running {n_episodes} episodes with defaults "
-          f"(α={default_alpha}, β={default_beta}, γ={default_gamma}) ...")
+          f"(a={default_alpha}, b={default_beta}, g={default_gamma}) ...")
 
     brier, acc = _run_single_calibration(
         kb, n_episodes, default_alpha, default_beta, default_gamma, base_seed=7000
     )
-    print(f"[calibration] Defaults → Brier={brier:.4f}, Accuracy={acc:.4f}")
+    print(f"[calibration] Defaults â†’ Brier={brier:.4f}, Accuracy={acc:.4f}")
 
     best_alpha, best_beta, best_gamma = default_alpha, default_beta, default_gamma
     best_brier, best_acc = brier, acc
 
-    # ── Step 2: grid search if needed ─────────────────────────────────────
+    # â”€â”€ Step 2: grid search if needed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if brier > 0.18 or acc < 0.75:
         print("[calibration] Defaults did not meet targets. Running grid search ...")
         grid_alpha = [1.0, 1.5, 2.0]
@@ -156,21 +156,21 @@ def run_calibration(
                         best_brier = gs_brier
                         best_acc = gs_acc
                         best_alpha, best_beta, best_gamma = a, b, g
-                        print(f"[calibration] Better: α={a}, β={b}, γ={g} → "
+                        print(f"[calibration] Better: a={a}, b={b}, g={g} -> "
                               f"Brier={gs_brier:.4f}, Acc={gs_acc:.4f}")
 
-    # ── Step 3: check targets ──────────────────────────────────────────────
-    print(f"[calibration] Final: α={best_alpha}, β={best_beta}, γ={best_gamma} → "
+    # â”€â”€ Step 3: check targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    print(f"[calibration] Final: a={best_alpha}, b={best_beta}, g={best_gamma} -> "
           f"Brier={best_brier:.4f}, Acc={best_acc:.4f}")
 
     if best_brier > 0.18 or best_acc < 0.75:
         raise CalibrationError(
             f"Calibration targets not met after grid search: "
-            f"Brier={best_brier:.4f} (target ≤0.18), "
-            f"Accuracy={best_acc:.4f} (target ≥0.75)"
+            f"Brier={best_brier:.4f} (target â‰¤0.18), "
+            f"Accuracy={best_acc:.4f} (target â‰¥0.75)"
         )
 
-    # ── Step 4: build output dict ──────────────────────────────────────────
+    # â”€â”€ Step 4: build output dict â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     per_section = {
         s: {"alpha": best_alpha, "beta": best_beta, "gamma": best_gamma}
         for s in kb.keys()
@@ -186,7 +186,7 @@ def run_calibration(
         },
     }
 
-    # ── Step 5: persist ────────────────────────────────────────────────────
+    # â”€â”€ Step 5: persist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(calibration_result, f, indent=2)
