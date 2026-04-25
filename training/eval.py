@@ -192,6 +192,8 @@ def run_eval(
             },
             "posterior_trace": bd.posterior_trace,
             "style_assignments": style_assignments,
+            # Dialogue history from final observation — required by select_transcripts.py
+            "dialogue": obs.get("dialogue_history", []),
         }
         episode_results.append(ep_record)
 
@@ -227,6 +229,10 @@ def run_eval(
                 "reward": r["reward"],
                 "reward_breakdown": r["reward_breakdown"],
                 "posterior_trace": r["posterior_trace"],
+                # Required by select_transcripts.py for before/after transcript export
+                "classifications": r["classifications"],
+                "true_labels": r["true_labels"],
+                "dialogue": r["dialogue"],
             }
             for r in episode_results
         },

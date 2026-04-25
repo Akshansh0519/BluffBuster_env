@@ -89,7 +89,20 @@ REWARD_COMPONENT_KEYS = [
     "R_info", "R_qual", "R_div", "P_malformed", "R_total",
 ]
 
-PLOT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs", "plots")
+# Resolve PLOT_DIR for both local dev and HF Space deployment.
+# When deployed to HF Space the Space root contains app.py directly, so
+# plots live at <space_root>/outputs/plots/.
+# When running from the repo root, plots live at outputs/plots/ (one level up
+# from hf_space/).
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_CANDIDATE_PLOT_DIRS = [
+    os.path.join(_THIS_DIR, "outputs", "plots"),          # HF Space at root
+    os.path.join(_THIS_DIR, "..", "outputs", "plots"),    # local dev from repo root
+]
+PLOT_DIR = next(
+    (d for d in _CANDIDATE_PLOT_DIRS if os.path.isdir(d)),
+    _CANDIDATE_PLOT_DIRS[0],  # default to Space-style even if not yet created
+)
 
 
 # ──────────────────────────────────────────────────────────
