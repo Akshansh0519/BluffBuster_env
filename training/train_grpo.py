@@ -716,13 +716,25 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 )
 
     # ── GRPOConfig ──────────────────────────────────────────────────────────
+    # Auto-detect bf16/fp16: T4 (CUDA 7.5) has no bf16 support.
+    import torch as _torch
+    _bf16_ok = (
+        _torch.cuda.is_available()
+        and _torch.cuda.is_bf16_supported()
+        and config.bf16
+    )
+    _fp16_ok = _torch.cuda.is_available() and not _bf16_ok
+    print(f"Precision: bf16={_bf16_ok}  fp16={_fp16_ok}  "
+          f"(GPU: {_torch.cuda.get_device_name(0) if _torch.cuda.is_available() else 'CPU'})")
+
     grpo_config = GRPOConfig(
         output_dir=os.path.join("outputs", "checkpoints"),
         num_train_epochs=1,
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=config.gradient_accumulation,
         learning_rate=config.learning_rate,
-        bf16=config.bf16,
+        bf16=_bf16_ok,
+        fp16=_fp16_ok,
         max_grad_norm=config.max_grad_norm,
         warmup_ratio=config.warmup_ratio,
         num_generations=config.num_generations,
