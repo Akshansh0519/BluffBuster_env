@@ -735,7 +735,15 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         "episode_seed": list(range(n)),
     })
 
-    # ── Eval + variance callback ────────────────────────────────────────────
+    # ── Checkpoint / eval cadence ────────────────────────────────────────────
+    # Save LoRA adapter (lightweight, ~50 MB) every N steps so a crash at eval
+    # time never loses more than N steps of progress.  Full Trainer checkpoints
+    # (optimizer state, ~4 GB) are kept at checkpoint_every_n_steps; we only
+    # keep the last 3 to avoid filling the Space disk.
+    _lora_save_every = {"DEBUG": 5, "DEMO": 10, "FULL": 25}.get(
+        config.config_name, 10
+    )
+
     reward_buffer: list[float] = []
     current_beta_kl = config.beta_kl
     checkpoint_metrics_log: dict = {}
@@ -749,38 +757,70 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                     reward_buffer.append(float(r))
 
         def on_step_end(self, args, state, control, **kw):
+            import torch
             nonlocal current_beta_kl
             step = state.global_step
+            if step == 0:
+                return
+
+            # ── Reward variance check ──────────────────────────────────────
             if step % 50 == 0 and reward_buffer:
                 current_beta_kl = _check_reward_variance(
                     reward_buffer, config, step, current_beta_kl
                 )
-            if step > 0 and step % config.eval_every_n_steps == 0:
+
+            # ── Lightweight LoRA adapter save ──────────────────────────────
+            # Saves only the LoRA adapter weights (~50 MB) every few steps.
+            # Much cheaper than a full Trainer checkpoint; survives crashes.
+            if step % _lora_save_every == 0:
+                lora_dir = os.path.join(
+                    "outputs", "checkpoints", f"lora-step-{step}"
+                )
+                try:
+                    os.makedirs(lora_dir, exist_ok=True)
+                    model.save_pretrained(lora_dir)
+                    print(f"[ckpt] LoRA adapter saved → {lora_dir}")
+                except Exception as _e:
+                    print(f"[ckpt] WARNING: LoRA save failed at step {step}: {_e}")
+
+            # ── Checkpoint eval ────────────────────────────────────────────
+            # CRITICAL: switch model to eval mode + no_grad before inference.
+            # Calling model.generate() in training mode with gradient
+            # checkpointing enabled causes OOM (builds full compute graph).
+            if step % config.eval_every_n_steps == 0:
                 print(f"\n[step {step}] Checkpoint eval...")
                 _TrainedExaminerWrapper.model = model
                 _TrainedExaminerWrapper.tokenizer = tokenizer
                 _TrainedExaminerWrapper.config = config
-                chk = run_eval(_TrainedExaminerWrapper(), eval_config, KB)
-                checkpoint_metrics_log[str(step)] = chk
-                os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
-                with open(
-                    os.path.join("outputs", "eval", "checkpoint_metrics.json"),
-                    "w",
-                ) as fp:
-                    json.dump(checkpoint_metrics_log, fp, indent=2)
-                if _WANDB_AVAILABLE and wandb.run:
-                    wandb.log({
-                        "eval/reward_mean": chk["reward_mean"],
-                        "eval/classification_accuracy": chk["classification_accuracy"],
-                        "eval/avg_info_gain": chk["avg_info_gain_per_turn"],
-                        "eval/calibration_ECE": chk["calibration_ECE"],
-                        "eval/false_accusation_rate": chk["false_accusation_rate"],
-                    }, step=step)
-                print(
-                    f"  accuracy={chk['classification_accuracy']:.3f} "
-                    f"info_gain={chk['avg_info_gain_per_turn']:.4f} "
-                    f"ECE={chk['calibration_ECE']:.4f}"
-                )
+                try:
+                    model.eval()
+                    with torch.no_grad():
+                        chk = run_eval(_TrainedExaminerWrapper(), eval_config, KB)
+                    checkpoint_metrics_log[str(step)] = chk
+                    os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
+                    with open(
+                        os.path.join("outputs", "eval", "checkpoint_metrics.json"),
+                        "w",
+                    ) as fp:
+                        json.dump(checkpoint_metrics_log, fp, indent=2)
+                    if _WANDB_AVAILABLE and wandb.run:
+                        wandb.log({
+                            "eval/reward_mean": chk["reward_mean"],
+                            "eval/classification_accuracy": chk["classification_accuracy"],
+                            "eval/avg_info_gain": chk["avg_info_gain_per_turn"],
+                            "eval/calibration_ECE": chk["calibration_ECE"],
+                            "eval/false_accusation_rate": chk["false_accusation_rate"],
+                        }, step=step)
+                    print(
+                        f"  accuracy={chk['classification_accuracy']:.3f} "
+                        f"info_gain={chk['avg_info_gain_per_turn']:.4f} "
+                        f"ECE={chk['calibration_ECE']:.4f}"
+                    )
+                except Exception as _eval_exc:
+                    print(f"[step {step}] WARNING: eval failed (training continues): "
+                          f"{_eval_exc}")
+                finally:
+                    model.train()
 
     # ── GRPOConfig ──────────────────────────────────────────────────────────
     # Precision: use device capability (reliable) not is_bf16_supported()
@@ -814,7 +854,8 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         warmup_ratio=config.warmup_ratio,
         num_generations=config.num_generations,
         beta=config.beta_kl,
-        save_steps=config.checkpoint_every_n_steps,
+        save_steps=_lora_save_every,   # match LoRA cadence
+        save_total_limit=3,            # keep last 3 full checkpoints only
         logging_steps=1,
         report_to="wandb" if _WANDB_AVAILABLE else "none",
         max_completion_length=config.max_seq_length,
@@ -846,7 +887,26 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     print(f"  LoRA: r={config.lora_rank} alpha={config.lora_alpha}")
     print(f"  Generations/step: {config.num_generations}")
     print(f"  Eval every {config.eval_every_n_steps} steps")
-    trainer.train()
+    print(f"  LoRA save every {_lora_save_every} steps")
+
+    # ── Resume from latest checkpoint if one exists ──────────────────────
+    # Looks for Trainer-format checkpoint dirs (checkpoint-N) in output_dir.
+    # If found, resumes optimizer state + step count; LoRA weights are already
+    # loaded since the model was initialised from the same base.
+    _ckpt_dir = os.path.join("outputs", "checkpoints")
+    _resume = None
+    if os.path.isdir(_ckpt_dir):
+        _ckpts = sorted(
+            [d for d in os.listdir(_ckpt_dir)
+             if d.startswith("checkpoint-") and
+             os.path.isdir(os.path.join(_ckpt_dir, d))],
+            key=lambda x: int(x.split("-")[-1]),
+        )
+        if _ckpts:
+            _resume = os.path.join(_ckpt_dir, _ckpts[-1])
+            print(f"  Resuming from checkpoint: {_resume}")
+
+    trainer.train(resume_from_checkpoint=_resume)
 
     # ── Final held-out eval ─────────────────────────────────────────────────
     print("\nRunning final held-out eval...")
