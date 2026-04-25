@@ -142,6 +142,78 @@ try:
 except RuntimeError as e:
     _check("no RuntimeError for Float mat1 + Half acc", False, str(e))
 
+# ── Test 9: DEBUG-scale shapes (Qwen2.5-1.5B: hidden=1536, r=8) ───────────
+print("\n[9] DEBUG-scale LoRA addmm_ (hidden=1536, r=8, seq=1024, bs=4)")
+BS, SEQ, H, R = 4, 1024, 1536, 8
+XA = torch.randn(BS * SEQ, R, dtype=torch.bfloat16)     # after LoRA A
+B  = torch.randn(R, H, dtype=torch.float32)             # LoRA B (fp32)
+out = torch.zeros(BS * SEQ, H, dtype=torch.bfloat16)    # accumulator (bf16)
+try:
+    out.addmm_(XA, B, beta=1.0, alpha=0.5)
+    _check(f"DEBUG-scale bf16+fp32 out.shape={tuple(out.shape)}",
+           out.shape == (BS * SEQ, H))
+except RuntimeError as e:
+    _check("DEBUG-scale bf16+fp32", False, str(e))
+
+# ── Test 10: DEMO/FULL-scale shapes (Qwen2.5-7B: hidden=3584, r=16) ───────
+print("\n[10] DEMO/FULL-scale LoRA addmm_ (hidden=3584, r=16, seq=2048, bs=2, num_gen=8)")
+BS, SEQ, H, R = 2 * 8, 2048, 3584, 16  # bs*num_generations
+XA = torch.randn(BS * SEQ, R, dtype=torch.bfloat16)
+B  = torch.randn(R, H, dtype=torch.float32)
+out = torch.zeros(BS * SEQ, H, dtype=torch.bfloat16)
+try:
+    out.addmm_(XA, B, beta=1.0, alpha=0.5)
+    _check(f"DEMO/FULL-scale bf16+fp32 out.shape={tuple(out.shape)}",
+           out.shape == (BS * SEQ, H))
+except RuntimeError as e:
+    _check("DEMO/FULL-scale bf16+fp32", False, str(e))
+
+# ── Test 11: MLP projection shape (gate/up: 3584→18944, down: 18944→3584) ─
+print("\n[11] MLP projection LoRA addmm_ (Qwen2.5-7B: intermediate=18944)")
+BS, SEQ, H_IN, H_OUT, R = 2, 2048, 3584, 18944, 16
+XA = torch.randn(BS * SEQ, R, dtype=torch.bfloat16)
+B  = torch.randn(R, H_OUT, dtype=torch.float32)
+out = torch.zeros(BS * SEQ, H_OUT, dtype=torch.bfloat16)
+try:
+    out.addmm_(XA, B)
+    _check(f"MLP gate/up-proj bf16+fp32 out.shape={tuple(out.shape)}",
+           out.shape == (BS * SEQ, H_OUT))
+except RuntimeError as e:
+    _check("MLP gate/up-proj bf16+fp32", False, str(e))
+
+# ── Test 12: fp16 accumulator (some kernels still use fp16 on older GPUs) ─
+print("\n[12] fp16 accumulator + fp32 LoRA B (T4 fallback path)")
+BS, SEQ, H, R = 4, 1024, 1536, 8
+XA = torch.randn(BS * SEQ, R, dtype=torch.float16)
+B  = torch.randn(R, H, dtype=torch.float32)
+out = torch.zeros(BS * SEQ, H, dtype=torch.float16)
+try:
+    out.addmm_(XA, B)
+    _check(f"fp16 accumulator out.shape={tuple(out.shape)}",
+           out.shape == (BS * SEQ, H))
+except RuntimeError as e:
+    _check("fp16 accumulator", False, str(e))
+
+# ── Test 13: residual-add shape (the failing line in DEBUG run) ───────────
+# LlamaDecoderLayer: hidden_states = residual + hidden_states
+# If matmul produces wrong shape, residual add fails with "1536 vs 1179648".
+# Verify our patch doesn't alter output shape.
+print("\n[13] Residual add compatibility (shape preservation)")
+BS, SEQ, H = 4, 1024, 1536
+residual       = torch.randn(BS, SEQ, H, dtype=torch.bfloat16)
+hidden_states  = torch.randn(BS, SEQ, H, dtype=torch.bfloat16)
+# Simulate an addmm_ op feeding into hidden_states
+flat = hidden_states.view(-1, H)
+XA = torch.randn(flat.shape[0], 8, dtype=torch.bfloat16)
+B  = torch.randn(8, H, dtype=torch.float32)
+flat.addmm_(XA, B)
+try:
+    result = residual + hidden_states
+    _check(f"residual + hidden_states shape={tuple(result.shape)}",
+           result.shape == (BS, SEQ, H))
+except RuntimeError as e:
+    _check("residual + hidden_states", False, str(e))
+
 # ── Cleanup ───────────────────────────────────────────────────────────────
 _uninstall_addmm_patch(orig)
 
