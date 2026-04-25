@@ -277,6 +277,15 @@ class ExaminerEnv(_BaseEnv):
         info["classifications"] = dict(classifications)
         info["style_assignments"] = dict(state.style_assignments)
         info["reward_breakdown"] = breakdown   # raw dataclass for eval.py
+        # Full dialogue for transcript selection (select_transcripts.py reads this)
+        info["dialogue"] = [
+            {
+                "section_id": turn["section_id"],
+                "question": turn["question"],
+                "response": turn["response"],
+            }
+            for turn in state.dialogue_history
+        ]
         return obs, breakdown.R_total, True, truncated, info
 
 

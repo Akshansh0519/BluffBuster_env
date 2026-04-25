@@ -1,0 +1,2082 @@
+{
+  "RandomExaminer": {
+    "classification_accuracy": 0.0,
+    "per_section_accuracy": {
+      "S01": 0.8,
+      "S02": 0.3,
+      "S03": 0.6,
+      "S04": 0.7,
+      "S05": 0.1,
+      "S06": 0.4,
+      "S07": 0.7,
+      "S08": 0.6,
+      "S09": 0.4,
+      "S10": 0.6
+    },
+    "false_accusation_rate": 0.25,
+    "false_exoneration_rate": 0.23,
+    "avg_turns_to_classify": 3.0,
+    "avg_info_gain_per_turn": 0.41795430805573985,
+    "terminal_posterior_correctness": 0.57,
+    "calibration_ECE": 0.06953207561814462,
+    "calibration_brier": 0.21352615758771684,
+    "mean_R_qual": 0.073,
+    "mean_R_info": 0.27887841309131833,
+    "mean_R_cal": 0.015460598061273331,
+    "parse_failure_rate": 0.0,
+    "reward_mean": -0.01666098884740827,
+    "reward_std": 0.43357753778366614,
+    "per_style_accuracy": {
+      "F1": 0.38461538461538464,
+      "K3": 0.5882352941176471,
+      "F4": 0.5,
+      "K2": 0.8125,
+      "F2": 0.46153846153846156,
+      "K1": 0.3181818181818182,
+      "F3": 0.8
+    },
+    "per_episode": {
+      "1000": {
+        "correct": false,
+        "R_info": 0.2228422605489382,
+        "reward": 0.4226884234278733,
+        "reward_breakdown": {
+          "R_acc": 0.4,
+          "R_asym": -0.13,
+          "R_cal": 0.037346162878935094,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.2228422605489382,
+          "R_qual": 0.0825,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.9046505351008906,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.9046505351008906,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What happens when the learning rate is set too high in gradient descent?",
+            "response": "So stochastic gradient descent is essentially a technique where a larger learning rate always trains the model faster without quality loss. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S03",
+            "question": "Give a scenario where a heavily regularised model still overfits.",
+            "response": "This is essentially just a model with zero training error is always overfitting \u2014 nothing too complicated."
+          }
+        ]
+      },
+      "1001": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.3599118602915893,
+        "reward_breakdown": {
+          "R_acc": -0.2,
+          "R_asym": -0.26,
+          "R_cal": -0.07241186029158934,
+          "R_eff": 0.0,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.4,
+          "R_qual": 0.0625,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.9525741268224334
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.9525741268224334
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S05",
+            "question": "Why do transformers need positional encodings and how do sinusoidal encodings provide position information?",
+            "response": "The fundamental idea is that encoder works by positional encodings inject token position information because self-attention is permutation-invariant. This is because residual connections allow gradients to bypass attention sublayers preventing vanishing gradients in deep stacks. This is because encoder builds bidirectional context representations while the decoder generates tokens autoregressively. This is because cross-attention in decoder attends to encoder output allowing the decoder to condition on input context. This connects directly to the concept of encoder."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "Essentially, chain rule works by chain rule applied to the composition of differentiable functions. This is because Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. This is because computational graph records operations during the forward pass for reverse-mode differentiation."
+          }
+        ]
+      },
+      "1002": {
+        "correct": false,
+        "R_info": 0.3073414053298368,
+        "reward": 0.5008440819717799,
+        "reward_breakdown": {
+          "R_acc": 0.4,
+          "R_asym": -0.13,
+          "R_cal": 0.04600267664194304,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.3073414053298368,
+          "R_qual": 0.0675,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.9525741268224334
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.37754066879814546,
+            "S10": 0.9525741268224334
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S05",
+            "question": "How would you adapt the transformer architecture for a long-document summarisation task?",
+            "response": "That's an interesting question. It's really about transformers are just larger recurrent neural networks that process sequences, which connects to broader ideas around translation equivariance. These concepts are all interrelated in machine learning."
+          },
+          {
+            "section_id": "S03",
+            "question": "When could adding more training data make overfitting worse?",
+            "response": "If I recall correctly, the core idea of bias-variance tradeoff involves L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. Furthermore, I think this relies on dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. Furthermore, I think this relies on L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient. This connects directly to the concept of early stopping."
+          }
+        ]
+      },
+      "1003": {
+        "correct": false,
+        "R_info": 0.021958827187367504,
+        "reward": -0.858218546387348,
+        "reward_breakdown": {
+          "R_acc": -0.4,
+          "R_asym": -0.25,
+          "R_cal": 0.004822626425284513,
+          "R_eff": 0.0,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.021958827187367504,
+          "R_qual": 0.05500000000000001,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.4378234991142019,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.37754066879814546,
+            "S05": 0.5,
+            "S06": 0.4378234991142019,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S02",
+            "question": "Can you give an example where gradients explode rather than vanish, and what causes that?",
+            "response": "Honestly, Jacobian is basically just a standard technique. deeper networks always have more vanishing gradient problems regardless of activation."
+          },
+          {
+            "section_id": "S03",
+            "question": "How would you choose between L1 and L2 regularisation for a feature selection problem?",
+            "response": "Essentially, cross-validation works by dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. This is because bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. This is because cross-validation estimates generalisation error by averaging performance across held-out folds. This is because L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient. This is because early stopping uses validation loss as a proxy for generalisation to halt training before overfitting."
+          }
+        ]
+      },
+      "1004": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.53,
+        "reward_breakdown": {
+          "R_acc": -0.4,
+          "R_asym": -0.31,
+          "R_cal": 0.0,
+          "R_eff": 0.0,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.4,
+          "R_qual": 0.06999999999999999,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S02",
+            "question": "Why does backpropagation rely on the chain rule, and how does that chain decompose for a two-layer network?",
+            "response": "I believe the core idea of computational graph involves chain rule applied to the composition of differentiable functions. Furthermore, I think this relies on upstream gradient from the next layer is multiplied element-wise with local gradient. Furthermore, I think this relies on computational graph records operations during the forward pass for reverse-mode differentiation. Furthermore, I think this relies on reverse-mode automatic differentiation traverses the graph from output to input. This connects directly to the concept of exploding gradient."
+          },
+          {
+            "section_id": "S02",
+            "question": "Can you give an example where gradients explode rather than vanish, and what causes that?",
+            "response": "I think the core idea of reverse-mode AD involves chain rule applied to the composition of differentiable functions. Furthermore, I think this relies on Jacobian matrix of partial derivatives of layer outputs with respect to inputs. Furthermore, I think this relies on upstream gradient from the next layer is multiplied element-wise with local gradient. Furthermore, I think this relies on vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero."
+          }
+        ]
+      },
+      "1005": {
+        "correct": false,
+        "R_info": 0.03497076849541676,
+        "reward": 0.004970768495416833,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.12,
+          "R_cal": 0.0,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.03497076849541676,
+          "R_qual": 0.08000000000000002,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.37754066879814546,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.37754066879814546,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S02",
+            "question": "Can you give an example where gradients explode rather than vanish, and what causes that?",
+            "response": "In essence, deeper networks always have more vanishing gradient problems regardless of activation. This is fundamentally connected to computational graph."
+          },
+          {
+            "section_id": "S05",
+            "question": "Give a task where a pure encoder transformer would underperform a recurrent model.",
+            "response": "Yes, transformer is indeed central here. In essence, the CLS token always summarises the entire input sequence. This is fundamentally connected to positional encoding."
+          }
+        ]
+      },
+      "1006": {
+        "correct": false,
+        "R_info": 0.3073414053298368,
+        "reward": 0.18343222168019052,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": -0.026409183649646308,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.3073414053298368,
+          "R_qual": 0.09250000000000001,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.37754066879814546,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "In terms of chain rule, chain rule applied to the composition of differentiable functions. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero."
+          },
+          {
+            "section_id": "S04",
+            "question": "Give a case where multi-head attention would outperform single-head attention and explain why.",
+            "response": "This is essentially just attention weights always sum to exactly one because of softmax \u2014 nothing too complicated."
+          }
+        ]
+      },
+      "1007": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.40491186029158943,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.16,
+          "R_cal": 0.07241186029158934,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.4,
+          "R_qual": 0.0825,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.9525741268224334,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.9525741268224334,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S03",
+            "question": "How does L2 regularisation mechanistically prevent overfitting through the weight update rule?",
+            "response": "That's an interesting question. It's really about dropout hurts performance at test time by randomly dropping information, which connects to broader ideas around encoder. These concepts are all interrelated in machine learning."
+          },
+          {
+            "section_id": "S01",
+            "question": "Give a counterexample where gradient descent does not converge to the global optimum.",
+            "response": "I think the core idea of Adam optimizer involves gradient of the loss with respect to parameters. Furthermore, I think this relies on adaptive per-parameter learning rates in Adam via first and second moment estimates."
+          }
+        ]
+      },
+      "1008": {
+        "correct": false,
+        "R_info": 0.2943294640217875,
+        "reward": 0.26306127409671837,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.13999999999999999,
+          "R_cal": 0.03123181007493082,
+          "R_eff": 0.1,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.2943294640217875,
+          "R_qual": 0.0675,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.9525741268224334,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S02",
+            "question": "What happens to gradients in very deep networks with sigmoid activations, and why?",
+            "response": "Yes, networks is indeed central here. In essence, deeper networks always have more vanishing gradient problems regardless of activation. This is fundamentally connected to Jacobian."
+          },
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So loss landscape is essentially a technique where batch size has no effect on the final model quality. It's a fundamental concept in the field."
+          }
+        ]
+      },
+      "1009": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.1983881117587138,
+        "reward_breakdown": {
+          "R_acc": -0.2,
+          "R_asym": -0.24,
+          "R_cal": 0.06161188824128616,
+          "R_eff": 0.0,
+          "R_cov": -0.33999999999999997,
+          "R_info": 0.4,
+          "R_qual": 0.06999999999999999,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.9525741268224334
+          },
+          {
+            "S01": 0.5,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.8175744761936437,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.9525741268224334
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S05",
+            "question": "Why do transformers need positional encodings and how do sinusoidal encodings provide position information?",
+            "response": "Honestly, residual connection is basically just a standard technique. transformers are just larger recurrent neural networks that process sequences."
+          },
+          {
+            "section_id": "S02",
+            "question": "Can you give an example where gradients explode rather than vanish, and what causes that?",
+            "response": "I think the core idea of Jacobian involves chain rule applied to the composition of differentiable functions. Furthermore, I think this relies on upstream gradient from the next layer is multiplied element-wise with local gradient. Furthermore, I think this relies on reverse-mode automatic differentiation traverses the graph from output to input. Furthermore, I think this relies on weight gradient is the outer product of upstream gradient and layer input. This connects directly to the concept of exploding gradient."
+          }
+        ]
+      }
+    },
+    "n_episodes": 10
+  },
+  "DefinitionalExaminer": {
+    "classification_accuracy": 0.0,
+    "per_section_accuracy": {
+      "S01": 0.4,
+      "S02": 0.8,
+      "S03": 1.0,
+      "S04": 0.5,
+      "S05": 0.5,
+      "S06": 0.4,
+      "S07": 0.4,
+      "S08": 0.4,
+      "S09": 0.5,
+      "S10": 0.4
+    },
+    "false_accusation_rate": 0.4,
+    "false_exoneration_rate": 0.07,
+    "avg_turns_to_classify": 4.0,
+    "avg_info_gain_per_turn": 0.3320359077760179,
+    "terminal_posterior_correctness": 0.61,
+    "calibration_ECE": 0.11081078569055393,
+    "calibration_brier": 0.19981568857625348,
+    "mean_R_qual": 0.008333333333333333,
+    "mean_R_info": 0.30338811446869296,
+    "mean_R_cal": 0.04744831058902158,
+    "parse_failure_rate": 0.0,
+    "reward_mean": -0.06683024160895208,
+    "reward_std": 0.3225856055936884,
+    "per_style_accuracy": {
+      "F1": 0.7692307692307693,
+      "K3": 0.35294117647058826,
+      "F4": 0.9285714285714286,
+      "K2": 0.25,
+      "F2": 0.8461538461538461,
+      "K1": 0.22727272727272727,
+      "F3": 0.8
+    },
+    "per_episode": {
+      "1000": {
+        "correct": false,
+        "R_info": 0.14781701314520354,
+        "reward": -0.3382663218512561,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.22999999999999998,
+          "R_cal": 0.02058333167020698,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.14781701314520354,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.8175744761936437,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.8175744761936437,
+            "S03": 0.4378234991142019,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "So Adam optimizer is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "If I recall correctly, the core idea of Jacobian involves chain rule applied to the composition of differentiable functions."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "Honestly, generalisation error is basically just a standard technique. a model with zero training error is always overfitting."
+          }
+        ]
+      },
+      "1001": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.20953926347912807,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": 0.03620593014579467,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.9525741268224334,
+            "S03": 0.8175744761936437,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "In terms of Adam optimizer, momentum accumulates an exponentially decaying average of past gradients."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "The fundamental idea is that automatic differentiation works by Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. This is because computational graph records operations during the forward pass for reverse-mode differentiation."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "In terms of dropout, L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights."
+          }
+        ]
+      },
+      "1002": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.2555419401210711,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": 0.08220860678773771,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "So momentum is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "In terms of exploding gradient, chain rule applied to the composition of differentiable functions. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "As far as I understand, the core idea of L1 regularization involves L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. Furthermore, I think this relies on L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient. Furthermore, I think this relies on early stopping uses validation loss as a proxy for generalisation to halt training before overfitting. This connects directly to the concept of training error."
+          }
+        ]
+      },
+      "1003": {
+        "correct": false,
+        "R_info": 0.2988029069614466,
+        "reward": 0.37834217044057467,
+        "reward_breakdown": {
+          "R_acc": 0.4,
+          "R_asym": -0.13,
+          "R_cal": 0.03620593014579467,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.2988029069614466,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.4378234991142019,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.4378234991142019,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "So saddle points is essentially a technique where momentum just adds noise to help escape local minima. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "This is essentially just backpropagation requires the loss function to be differentiable everywhere \u2014 nothing too complicated."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "Simply put, cross-validation works by L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. This is because dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. This is because bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. This is because L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient. This is because data augmentation effectively increases the training distribution without new labelled data."
+          }
+        ]
+      },
+      "1004": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.04928068630421342,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.07738598036245319,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "So learning rate is essentially a technique where batch size has no effect on the final model quality. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "If I recall correctly, the core idea of upstream gradient involves Jacobian matrix of partial derivatives of layer outputs with respect to inputs. Furthermore, I think this relies on vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. Furthermore, I think this relies on computational graph records operations during the forward pass for reverse-mode differentiation. Furthermore, I think this relies on weight gradient is the outer product of upstream gradient and layer input. This connects directly to the concept of computational graph."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "If I recall correctly, the core idea of L2 regularization involves L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. Furthermore, I think this relies on dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. Furthermore, I think this relies on bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. Furthermore, I think this relies on cross-validation estimates generalisation error by averaging performance across held-out folds."
+          }
+        ]
+      },
+      "1005": {
+        "correct": false,
+        "R_info": 0.039444211435075885,
+        "reward": -0.1521965753024546,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.16,
+          "R_cal": -0.00497412007086385,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.039444211435075885,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.37754066879814546,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.37754066879814546,
+            "S03": 0.37754066879814546,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "At the end of the day, convergence boils down to batch size has no effect on the final model quality. It's quite straightforward."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "Yes, Backpropagation is indeed central here. In essence, backpropagation sends the actual error values backwards through the network. This is fundamentally connected to upstream gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "This is essentially just L1 and L2 regularisation are interchangeable because they both penalise weight magnitude \u2014 nothing too complicated."
+          }
+        ]
+      },
+      "1006": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.04405155287122561,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.22999999999999998,
+          "R_cal": 0.06261511379544098,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "That's an interesting question. It's really about gradient descent only works on convex loss functions, which connects to broader ideas around learnable scale gamma. These concepts are all interrelated in machine learning."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "In terms of reverse-mode AD, Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "At its core, bias-variance tradeoff works by L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. This is because dropout randomly zeroes activations during training which approximates an ensemble of subnetworks."
+          }
+        ]
+      },
+      "1007": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.05525803192923208,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.07140863473743453,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.8175744761936437,
+            "S02": 0.9525741268224334,
+            "S03": 0.37754066879814546,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "I'm fairly certain that the core idea of saddle points involves adaptive per-parameter learning rates in Adam via first and second moment estimates. This connects directly to the concept of convergence."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "Simply put, automatic differentiation works by Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. This is because computational graph records operations during the forward pass for reverse-mode differentiation. This is because reverse-mode automatic differentiation traverses the graph from output to input. This connects directly to the concept of exploding gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "At a high level, this is about regularisation just adds random noise to the training process. The details vary by context."
+          }
+        ]
+      },
+      "1008": {
+        "correct": false,
+        "R_info": 0.14781701314520354,
+        "reward": -0.8282145619929838,
+        "reward_breakdown": {
+          "R_acc": -0.4,
+          "R_asym": -0.31,
+          "R_cal": 0.010635091528479279,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.14781701314520354,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.8175744761936437,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "So convergence is essentially a technique where gradient descent always finds the global minimum. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "In essence, deeper networks always have more vanishing gradient problems regardless of activation. This is fundamentally connected to exploding gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "In terms of generalisation error, L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights."
+          }
+        ]
+      },
+      "1009": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.04445805987892891,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.0822086067877377,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.008333333333333333,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.37754066879814546,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is Gradient Descent and Optimization?",
+            "response": "At its core, Adam optimizer works by gradient of the loss with respect to parameters. This is because learning rate scales the magnitude of each update step. This is because momentum accumulates an exponentially decaying average of past gradients. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because learning rate schedule anneals step size during training."
+          },
+          {
+            "section_id": "S02",
+            "question": "What is Backpropagation?",
+            "response": "I think the core idea of automatic differentiation involves computational graph records operations during the forward pass for reverse-mode differentiation. Furthermore, I think this relies on reverse-mode automatic differentiation traverses the graph from output to input. Furthermore, I think this relies on weight gradient is the outer product of upstream gradient and layer input. This connects directly to the concept of Jacobian."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is Overfitting and Regularization?",
+            "response": "Yes, Regularization is indeed central here. In essence, more training data always prevents overfitting regardless of model capacity."
+          }
+        ]
+      }
+    },
+    "n_episodes": 10
+  },
+  "BayesianHeuristicExaminer": {
+    "classification_accuracy": 0.0,
+    "per_section_accuracy": {
+      "S01": 1.0,
+      "S02": 1.0,
+      "S03": 1.0,
+      "S04": 0.5,
+      "S05": 0.5,
+      "S06": 0.4,
+      "S07": 0.4,
+      "S08": 0.4,
+      "S09": 0.5,
+      "S10": 0.4
+    },
+    "false_accusation_rate": 0.39,
+    "false_exoneration_rate": 0.0,
+    "avg_turns_to_classify": 4.0,
+    "avg_info_gain_per_turn": 0.37411969499942843,
+    "terminal_posterior_correctness": 0.61,
+    "calibration_ECE": 0.10615796786852964,
+    "calibration_brier": 0.19839326822977188,
+    "mean_R_qual": 0.025,
+    "mean_R_info": 0.322390286242732,
+    "mean_R_cal": 0.0670736257051763,
+    "parse_failure_rate": 0.0,
+    "reward_mean": 0.18446391194790837,
+    "reward_std": 0.2808237471365112,
+    "per_style_accuracy": {
+      "F1": 1.0,
+      "K3": 0.35294117647058826,
+      "F4": 1.0,
+      "K2": 0.3125,
+      "F2": 1.0,
+      "K1": 0.22727272727272727,
+      "F3": 1.0
+    },
+    "per_episode": {
+      "1000": {
+        "correct": false,
+        "R_info": 0.3118148482694959,
+        "reward": 0.15279164498230285,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": 0.050976796712806895,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.3118148482694959,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.4378234991142019,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So loss landscape is essentially a technique where a larger learning rate always trains the model faster without quality loss. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "I think the core idea of chain rule involves Jacobian matrix of partial derivatives of layer outputs with respect to inputs. Furthermore, I think this relies on computational graph records operations during the forward pass for reverse-mode differentiation."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "This is essentially just dropout hurts performance at test time by randomly dropping information \u2014 nothing too complicated."
+          }
+        ]
+      },
+      "1001": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.5378178183870809,
+        "reward_breakdown": {
+          "R_acc": 0.4,
+          "R_asym": -0.15,
+          "R_cal": 0.09781781838708083,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.8175744761936437,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "In terms of gradient vector, learning rate scales the magnitude of each update step. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "Essentially, chain rule works by chain rule applied to the composition of differentiable functions. This is because Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. This is because computational graph records operations during the forward pass for reverse-mode differentiation."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "In terms of cross-validation, L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. This connects directly to the concept of L2 regularization."
+          }
+        ]
+      },
+      "1002": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.2722086067877378,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": 0.08220860678773771,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So learning rate is essentially a technique where gradient descent always finds the global minimum. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "In terms of vanishing gradient, chain rule applied to the composition of differentiable functions. This is because computational graph records operations during the forward pass for reverse-mode differentiation."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "I think the core idea of early stopping involves dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. Furthermore, I think this relies on bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. This connects directly to the concept of cross-validation."
+          }
+        ]
+      },
+      "1003": {
+        "correct": false,
+        "R_info": 0.3118148482694959,
+        "reward": 0.6527916449823028,
+        "reward_breakdown": {
+          "R_acc": 0.6,
+          "R_asym": -0.1,
+          "R_cal": 0.05097679671280688,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.3118148482694959,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So stochastic gradient descent is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "This is essentially just deeper networks always have more vanishing gradient problems regardless of activation \u2014 nothing too complicated."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "The key point is that L2 regularization works by L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. This is because dropout randomly zeroes activations during training which approximates an ensemble of subnetworks. This is because bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. This is because cross-validation estimates generalisation error by averaging performance across held-out folds. This is because L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient."
+          }
+        ]
+      },
+      "1004": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.027791393212262226,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.08220860678773771,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So gradient vector is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "I'm fairly certain that the core idea of reverse-mode AD involves Jacobian matrix of partial derivatives of layer outputs with respect to inputs. Furthermore, I think this relies on upstream gradient from the next layer is multiplied element-wise with local gradient. Furthermore, I think this relies on weight gradient is the outer product of upstream gradient and layer input. This connects directly to the concept of upstream gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "I'm fairly certain that the core idea of L1 regularization involves bias-variance decomposition decomposes generalisation error into irreducible noise, bias, and variance terms. Furthermore, I think this relies on cross-validation estimates generalisation error by averaging performance across held-out folds. Furthermore, I think this relies on L1 regularisation induces sparsity by pushing small weights exactly to zero via subgradient."
+          }
+        ]
+      },
+      "1005": {
+        "correct": false,
+        "R_info": 0.052456152743125144,
+        "reward": 0.37184639223157023,
+        "reward_breakdown": {
+          "R_acc": 0.6,
+          "R_asym": -0.1,
+          "R_cal": 0.02939023948844509,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.052456152743125144,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.37754066879814546,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.37754066879814546,
+            "S03": 0.37754066879814546,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "At the end of the day, gradient vector boils down to gradient descent always finds the global minimum. It's quite straightforward."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "Yes, Explain is indeed central here. In essence, backpropagation just reverses the computation of the forward pass. This is fundamentally connected to Jacobian."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "Honestly, bias-variance tradeoff is basically just a standard technique. more training data always prevents overfitting regardless of model capacity."
+          }
+        ]
+      },
+      "1006": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": 0.26738598036245326,
+        "reward_breakdown": {
+          "R_acc": 0.2,
+          "R_asym": -0.2,
+          "R_cal": 0.07738598036245319,
+          "R_eff": 0.05,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.4378234991142019,
+            "S02": 0.9525741268224334,
+            "S03": 0.9525741268224334,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "At a high level, this is about batch size has no effect on the final model quality. The details vary by context."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "In terms of upstream gradient, chain rule applied to the composition of differentiable functions. This is because upstream gradient from the next layer is multiplied element-wise with local gradient."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "The key point is that generalisation error works by L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights. This is because dropout randomly zeroes activations during training which approximates an ensemble of subnetworks."
+          }
+        ]
+      },
+      "1007": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.02779139321226224,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.0822086067877377,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.37754066879814546,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "If I recall correctly, the core idea of gradient vector involves learning rate scales the magnitude of each update step. Furthermore, I think this relies on momentum accumulates an exponentially decaying average of past gradients. Furthermore, I think this relies on adaptive per-parameter learning rates in Adam via first and second moment estimates."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "The fundamental idea is that vanishing gradient works by chain rule applied to the composition of differentiable functions. This is because Jacobian matrix of partial derivatives of layer outputs with respect to inputs. This is because upstream gradient from the next layer is multiplied element-wise with local gradient. This is because vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "That's an interesting question. It's really about L1 and L2 regularisation are interchangeable because they both penalise weight magnitude, which connects to broader ideas around layer normalisation. These concepts are all interrelated in machine learning."
+          }
+        ]
+      },
+      "1008": {
+        "correct": false,
+        "R_info": 0.14781701314520354,
+        "reward": -0.3220061621922927,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.040176824662503705,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.14781701314520354,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.37754066879814546,
+            "S02": 0.4378234991142019,
+            "S03": 0.8175744761936437,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "So saddle points is essentially a technique where a larger learning rate always trains the model faster without quality loss. It's a fundamental concept in the field."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "Yes, backpropagation is indeed central here. In essence, backpropagation requires the loss function to be differentiable everywhere. This is fundamentally connected to computational graph."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "In terms of bias-variance tradeoff, L2 regularisation adds a penalty proportional to the squared magnitude of weights encouraging smaller weights."
+          }
+        ]
+      },
+      "1009": {
+        "correct": false,
+        "R_info": 0.4,
+        "reward": -0.03261401963754674,
+        "reward_breakdown": {
+          "R_acc": 0.0,
+          "R_asym": -0.25,
+          "R_cal": 0.0773859803624532,
+          "R_eff": 0.0,
+          "R_cov": -0.33499999999999996,
+          "R_info": 0.4,
+          "R_qual": 0.025,
+          "R_div": 0.05,
+          "P_malformed": -0.0
+        },
+        "posterior_trace": [
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.5,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.5,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          },
+          {
+            "S01": 0.9525741268224334,
+            "S02": 0.9525741268224334,
+            "S03": 0.4378234991142019,
+            "S04": 0.5,
+            "S05": 0.5,
+            "S06": 0.5,
+            "S07": 0.5,
+            "S08": 0.5,
+            "S09": 0.5,
+            "S10": 0.5
+          }
+        ],
+        "dialogue": [
+          {
+            "section_id": "S01",
+            "question": "What is gradient descent?",
+            "response": "Essentially, Adam optimizer works by gradient of the loss with respect to parameters. This is because learning rate scales the magnitude of each update step. This is because momentum accumulates an exponentially decaying average of past gradients. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm."
+          },
+          {
+            "section_id": "S02",
+            "question": "Explain backpropagation.",
+            "response": "As far as I understand, the core idea of exploding gradient involves chain rule applied to the composition of differentiable functions. Furthermore, I think this relies on Jacobian matrix of partial derivatives of layer outputs with respect to inputs. Furthermore, I think this relies on vanishing gradient occurs when sigmoid activations saturate and derivatives approach zero. Furthermore, I think this relies on computational graph records operations during the forward pass for reverse-mode differentiation."
+          },
+          {
+            "section_id": "S03",
+            "question": "What is overfitting?",
+            "response": "Yes, overfitting is indeed central here. In essence, dropout hurts performance at test time by randomly dropping information."
+          }
+        ]
+      }
+    },
+    "n_episodes": 10
+  }
+}
