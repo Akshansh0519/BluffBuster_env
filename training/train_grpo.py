@@ -716,16 +716,24 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 )
 
     # ── GRPOConfig ──────────────────────────────────────────────────────────
-    # Auto-detect bf16/fp16: T4 (CUDA 7.5) has no bf16 support.
+    # Precision: use device capability (reliable) not is_bf16_supported()
+    # which returns False on some HF Spaces A10G driver configs.
+    # Bf16 requires SM >= 8.0 (Ampere: A10G=8.6, A100=8.0).
+    # NEVER fall back to fp16: Unsloth fast_lora mixes fp16 activations with
+    # float32 LoRA matrices, causing RuntimeError on addmm_.
     import torch as _torch
-    _bf16_ok = (
-        _torch.cuda.is_available()
-        and _torch.cuda.is_bf16_supported()
-        and config.bf16
-    )
-    _fp16_ok = _torch.cuda.is_available() and not _bf16_ok
+    if _torch.cuda.is_available():
+        _cap_major = _torch.cuda.get_device_capability()[0]
+        _bf16_ok = _cap_major >= 8 and config.bf16
+        _fp16_ok = False  # fp16+fp32 LoRA mismatch in Unsloth kernels
+        _gpu_name = _torch.cuda.get_device_name(0)
+    else:
+        _cap_major = 0
+        _bf16_ok = False
+        _fp16_ok = False
+        _gpu_name = "CPU"
     print(f"Precision: bf16={_bf16_ok}  fp16={_fp16_ok}  "
-          f"(GPU: {_torch.cuda.get_device_name(0) if _torch.cuda.is_available() else 'CPU'})")
+          f"(GPU: {_gpu_name}, SM {_cap_major}.x)")
 
     grpo_config = GRPOConfig(
         output_dir=os.path.join("outputs", "checkpoints"),
