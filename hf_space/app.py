@@ -412,7 +412,10 @@ def create_app():
                 "- **DEMO** — 100 episodes, Qwen2.5-7B, submission gate / evidence run.\n"
                 "- **FULL** — 500 episodes, all 10 sections, main training run "
                 "(optimizer steps ≈ `500 / batch_size` → **~250 steps** with `batch_size=2`). "
-                "Use a strong GPU (A100) and expect many hours.\n\n"
+                "Use a strong GPU (A100) and expect many hours.\n"
+                "- **Safety** — checkpoints are saved every 10 steps and relaunch "
+                "auto-resumes from the latest `outputs/checkpoints/checkpoint-*`.\n"
+                "- To force a fresh run, delete `outputs/checkpoints/` first.\n\n"
                 "> Credentials are read from Space secrets (already set). "
                 "Pick a config and click Launch."
             )
@@ -473,6 +476,7 @@ def create_app():
                     r_mean = final_metrics.get("reward_mean", float("nan"))
                     return (
                         f"✅ Training complete ({config_name})\n"
+                        f"  Resume policy: auto-resume from latest checkpoint if present\n"
                         f"  Classification accuracy (held-out): {acc:.3f}\n"
                         f"  Avg info gain/turn:                 {gain:.4f}\n"
                         f"  Calibration ECE:                    {ece:.4f}\n"
