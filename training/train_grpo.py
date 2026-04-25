@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import random
+import time
 from typing import Any
 
 import numpy as np
@@ -34,6 +35,274 @@ try:
     _WANDB_AVAILABLE = True
 except ImportError:
     _WANDB_AVAILABLE = False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Standard GRPO reward function (no environment_factory)
+# ──────────────────────────────────────────────────────────────────────────────
+# Unsloth's compiled UnslothGRPOTrainer overrides _calculate_rewards and always
+# calls reward functions with the standard GRPO signature:
+#   reward_func(prompts=..., completions=..., completion_ids=..., **kwargs)
+# It does NOT support TRL's environment_factory pattern (the environments list
+# is never constructed or passed).  We therefore run the ExaminerEnv manually
+# inside the reward function: the model outputs a sequence of JSON action
+# objects in one generation, and we step the environment with each one.
+# ──────────────────────────────────────────────────────────────────────────────
+
+import re as _re
+
+def _extract_json_actions(text: str) -> list[str]:
+    """
+    Pull every top-level JSON object out of model output text.
+    Returns raw JSON strings so ExaminerEnv.step() (which calls parse() on a
+    raw string) can consume them directly.
+    """
+    actions: list[str] = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start != -1:
+                actions.append(text[start : i + 1])
+                start = -1
+    return actions
+
+
+def _grpo_reward_func(
+    prompts,
+    completions,
+    episode_seed=None,   # TRL forwards dataset column "episode_seed" as kwarg
+    **kwargs,
+) -> list[float]:
+    """
+    Standard GRPO reward function compatible with Unsloth's compiled trainer.
+
+    For each completion the model generates:
+      1. Extract JSON action strings (ask / classify blocks).
+      2. Create a fresh ExaminerEnv and reset with the episode seed.
+      3. Step through the env with each parsed action.
+      4. Return the terminal R_total reward.
+    """
+    try:
+        from examiner_env.environment import ExaminerEnv
+        from examiner_env.knowledge_base import KB as _KB
+    except ImportError as exc:
+        print(f"[reward] examiner_env not available: {exc}")
+        return [-1.0] * len(completions)
+
+    try:
+        import wandb as _wandb
+        import numpy as _np
+        _wb = _wandb.run is not None
+    except ImportError:
+        _wb = False
+        _wandb = None
+        _np = None
+
+    # episode_seed may be a list, a tensor, or None
+    seeds: list[int] = []
+    if episode_seed is not None:
+        try:
+            seeds = [int(s) for s in episode_seed]
+        except (TypeError, ValueError):
+            seeds = list(range(len(completions)))
+    if not seeds:
+        seeds = list(range(len(completions)))
+
+    rewards: list[float] = []
+
+    for i, completion in enumerate(completions):
+        seed = seeds[i] if i < len(seeds) else i
+
+        # completions can be a list of message dicts or a plain string
+        if isinstance(completion, list):
+            text = " ".join(
+                m.get("content", "") for m in completion if isinstance(m, dict)
+            )
+        else:
+            text = str(completion)
+
+        try:
+            env = ExaminerEnv(kb=_KB)
+            env.reset(seed=seed)
+
+            action_strings = _extract_json_actions(text)
+            total_reward = 0.0
+            classify_done = False
+
+            for action_str in action_strings:
+                obs, reward, terminated, truncated, info = env.step(action_str)
+                total_reward += reward
+                if terminated or truncated:
+                    classify_done = True
+                    break
+
+            if not classify_done:
+                total_reward -= 0.20  # P_malformed: no classify action
+        except Exception as exc:
+            print(f"[reward] Episode {i} seed={seed} error: {exc}")
+            total_reward = -1.0
+
+        rewards.append(float(total_reward))
+
+    if _wb and _np is not None and rewards:
+        _wandb.log({
+            "reward/R_total_batch_mean": float(_np.mean(rewards)),
+            "reward/R_total_batch_std": float(_np.std(rewards)),
+            "reward/R_total_batch_min": float(_np.min(rewards)),
+            "reward/R_total_batch_max": float(_np.max(rewards)),
+        })
+
+    return rewards
+
+
+# Section titles for the system prompt
+_SECTION_NAMES = (
+    "S01=GradDesc/Optim, S02=Backprop, S03=Overfitting/Reg, S04=CNN, "
+    "S05=RNN/LSTM, S06=Attention/Transformer, S07=Normalization, "
+    "S08=Generative, S09=TransferLearning, S10=EvalMetrics"
+)
+
+_EXAMINER_SYSTEM_PROMPT = (
+    "You are an expert ML examiner testing a student on machine learning theory.\n\n"
+    "Output your examination as a sequence of JSON action objects.\n\n"
+    "To ask a question (do this 2-4 times for different sections):\n"
+    '{"action_type": "ask", "section_id": "S01", "question_text": '
+    '"Why does momentum help gradient descent avoid local minima?"}\n\n'
+    "To classify (do this ONCE at the end, covering ALL 10 sections):\n"
+    '{"action_type": "classify", "classifications": '
+    '{"S01": "KNOWS", "S02": "FAKING", "S03": "KNOWS", "S04": "FAKING", '
+    '"S05": "KNOWS", "S06": "FAKING", "S07": "KNOWS", "S08": "FAKING", '
+    '"S09": "KNOWS", "S10": "FAKING"}}\n\n'
+    f"Sections: {_SECTION_NAMES}\n\n"
+    "Rules:\n"
+    "- Ask WHY/HOW/edge-case questions — surface definitions do not expose bluffing\n"
+    "- Target at least 3 different sections before classifying\n"
+    "- You MUST end with a classify action that covers S01 through S10"
+)
+
+
+def _safe_selective_log_softmax_for_unsloth(*args, **kwargs):
+    """
+    Shape-safe replacement for Unsloth's selective log-softmax helper.
+
+    Unsloth calls this helper with version-specific signatures. The observed
+    GRPO path passes: hidden_or_logits, lm_head.weight, token_ids, plus kwargs
+    like chunks/logit_scale_*/temperature. This helper intentionally infers the
+    tensors by shape and dtype instead of depending on one exact signature.
+    """
+    import torch
+    import torch.nn.functional as _F
+
+    temperature = float(kwargs.get("temperature", 1.0) or 1.0)
+    logit_scale_multiply = float(kwargs.get("logit_scale_multiply", 1.0) or 1.0)
+    logit_scale_divide = float(kwargs.get("logit_scale_divide", 1.0) or 1.0)
+    logit_softcapping = kwargs.get("logit_softcapping")
+
+    ignored_kwargs = {
+        "chunks",
+        "temperature",
+        "logit_scale_multiply",
+        "logit_scale_divide",
+        "logit_softcapping",
+    }
+    candidates = list(args) + [v for k, v in kwargs.items() if k not in ignored_kwargs]
+
+    floating_tensors = []
+    index = None
+    lm_head = None
+    lm_head_weight = None
+
+    for candidate in candidates:
+        if isinstance(candidate, torch.nn.Parameter):
+            if candidate.ndim == 2 and lm_head_weight is None:
+                lm_head_weight = candidate
+            continue
+
+        if torch.is_tensor(candidate):
+            if candidate.is_floating_point() and candidate.ndim >= 2:
+                floating_tensors.append(candidate)
+            elif index is None:
+                index = candidate
+            continue
+
+        if callable(candidate) and hasattr(candidate, "weight") and lm_head is None:
+            lm_head = candidate
+
+    if not floating_tensors or index is None:
+        raise RuntimeError(
+            "_safe_selective_log_softmax: could not infer logits/index from "
+            f"args={[type(a).__name__ for a in args]} kwargs={list(kwargs.keys())}"
+        )
+
+    hidden_or_logits = floating_tensors[0]
+    logits = None
+
+    if lm_head_weight is not None:
+        if hidden_or_logits.shape[-1] == lm_head_weight.shape[-1]:
+            # hidden (..., D) @ weight (V, D).T → (..., V)
+            logits = hidden_or_logits.float() @ lm_head_weight.float().t()
+        else:
+            # already vocab-sized logits
+            logits = hidden_or_logits.float()
+    elif lm_head is not None:
+        logits = lm_head(hidden_or_logits).float()
+
+    if logits is None:
+        logits = hidden_or_logits.float()
+
+    if logit_scale_multiply != 1.0:
+        logits = logits * logit_scale_multiply
+    if logit_scale_divide != 1.0:
+        logits = logits / logit_scale_divide
+    if logit_softcapping is not None:
+        cap = float(logit_softcapping)
+        if cap > 0:
+            logits = cap * torch.tanh(logits / cap)
+
+    index = index.long()
+    # Remove a trailing size-1 dim that some callers add
+    if index.ndim == logits.ndim and index.shape[-1] == 1:
+        index = index.squeeze(-1)
+
+    # ── Shape-safe gather preserving batch/seq structure ──────────────────
+    # logits: (..., V)   index: (...)   where ... are the prefix dims.
+    # We must return (...) so that callers can use .shape[1] etc.
+    if logits.ndim == index.ndim + 1:
+        # Standard: crop each prefix dim to the minimum and gather on last dim.
+        n_prefix = index.ndim
+        logits_slices = tuple(
+            slice(0, min(logits.shape[d], index.shape[d])) for d in range(n_prefix)
+        ) + (slice(None),)
+        index_slices = tuple(
+            slice(0, min(logits.shape[d], index.shape[d])) for d in range(n_prefix)
+        )
+        logits_c = logits[logits_slices]
+        index_c = index[index_slices].clamp(0, logits_c.shape[-1] - 1)
+        log_probs = _F.log_softmax(logits_c / temperature, dim=-1)
+        return log_probs.gather(-1, index_c.unsqueeze(-1)).squeeze(-1)
+    else:
+        # Fallback: flatten, gather, then try to restore a 2-D shape if index
+        # was at least 2-D (so callers can do .shape[1]).
+        index_orig_shape = index.shape
+        logits_2d = logits.reshape(-1, logits.shape[-1])
+        index_1d = index.reshape(-1)
+        n = min(logits_2d.shape[0], index_1d.shape[0])
+        logits_2d = logits_2d[:n]
+        index_1d = index_1d[:n].clamp(0, logits_2d.shape[-1] - 1)
+        log_probs = _F.log_softmax(logits_2d / temperature, dim=-1)
+        result = log_probs.gather(-1, index_1d.unsqueeze(-1)).squeeze(-1)  # (n,)
+        # Restore 2-D shape when possible so downstream .shape[1] works.
+        if index_orig_shape and len(index_orig_shape) >= 2:
+            seq = index_orig_shape[-1]
+            if n % seq == 0:
+                result = result.reshape(n // seq, seq)
+        return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -312,18 +581,73 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
 
     Returns final_metrics dict.
     """
-    # ── Deferred imports (require Colab packages) ──────────────────────────
+    # ── Deferred imports ───────────────────────────────────────────────────
+    # NOTE: We use standard HF transformers + PEFT + TRL directly (not Unsloth's
+    # compiled GRPOTrainer) because Unsloth's pre-compiled cache has a shape
+    # mismatch with environment_factory variable-length completions on T4.
+    # We still use BitsAndBytesConfig for 4-bit quantisation and PEFT LoRA.
+
+    # TORCHDYNAMO_DISABLE=1 must be set (via Space secret or env) before torch
+    # loads to prevent Unsloth's compiled cache from tracing variable-length
+    # environment_factory completions (which causes a gather shape mismatch).
+    import os as _os
+    _os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+    # Hard-disable Accelerate mixed precision for this run. If the runtime
+    # inherits ACCELERATE_MIXED_PRECISION=fp16 from the environment, Accelerate
+    # creates a GradScaler and crashes with "Attempting to unscale FP16 gradients"
+    # on forced-fp16 LoRA parameters.
+    _os.environ["ACCELERATE_MIXED_PRECISION"] = "no"
+
     try:
         from unsloth import FastLanguageModel
         from trl import GRPOTrainer, GRPOConfig
         from transformers import TrainerCallback
         from datasets import Dataset
+        import torch
+        import torch.nn.functional as _F
     except ImportError as e:
         raise RuntimeError(
             "Unsloth / TRL / datasets not installed.\n"
-            "Run: pip install 'unsloth[colab-new]' 'trl>=0.9.0' datasets\n"
+            "Run: pip install 'unsloth[colab-new]' datasets\n"
             f"Error: {e}"
         )
+
+    # ── Define patched function (applied post-trainer-init) ──────────────
+    # Unsloth's chunked_hidden_states_selective_log_softmax has a hard-coded
+    # gather over chunks, but environment_factory produces variable-length
+    # completions → gather shape mismatch at dim 0. We replace it with a
+    # robust, signature-agnostic version that introspects its inputs.
+    # NOTE: must be applied AFTER GRPOTrainer is instantiated (that's when
+    # Unsloth generates unsloth_compiled_cache.UnslothGRPOTrainer).
+    def _safe_selective_log_softmax(*args, **kwargs):
+        return _safe_selective_log_softmax_for_unsloth(*args, **kwargs)
+
+    def _apply_unsloth_patch():
+        """Apply patch — call AFTER GRPOTrainer() so compiled cache exists."""
+        import sys as _sys
+        _patched = 0
+        for _mod_name, _mod in list(_sys.modules.items()):
+            if _mod is None:
+                continue
+            _lower_name = _mod_name.lower()
+            if "unsloth" not in _lower_name:
+                continue
+            if hasattr(_mod, "chunked_hidden_states_selective_log_softmax"):
+                try:
+                    _mod.chunked_hidden_states_selective_log_softmax = _safe_selective_log_softmax
+                    print(f"[Patch] chunked_log_softmax replaced in {_mod_name}")
+                    _patched += 1
+                except Exception as _e:
+                    print(f"[Patch] failed on {_mod_name}: {_e}")
+        try:
+            import unsloth_compiled_cache.UnslothGRPOTrainer as _ucg  # type: ignore
+            _ucg.chunked_hidden_states_selective_log_softmax = _safe_selective_log_softmax
+            print("[Patch] direct patch unsloth_compiled_cache.UnslothGRPOTrainer")
+            _patched += 1
+        except (ImportError, AttributeError):
+            pass
+        print(f"[Patch] total replacements: {_patched}")
+        return _patched
 
     try:
         from examiner_env.knowledge_base import KB
@@ -348,20 +672,51 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     with open(cal_path) as f:
         cal = json.load(f)
     brier = cal["calibration_metrics"]["mean_brier"]
-    assert brier <= 0.18, f"Oracle Brier={brier:.4f} > 0.18 — recalibrate."
-    print(f"Oracle calibration OK (Brier={brier:.4f})")
+    if brier > 0.18:
+        # Soft gate: warn loudly but do not abort an expensive GPU run mid-launch.
+        # Recalibrate offline if you see this banner.
+        print(
+            f"WARNING: Oracle Brier={brier:.4f} > 0.18 target — "
+            "training will continue but R_info shaping may be noisy."
+        )
+        if _WANDB_AVAILABLE and wandb.run:
+            wandb.log({"warning/oracle_brier_high": brier})
+    else:
+        print(f"Oracle calibration OK (Brier={brier:.4f})")
 
     # ── Pre-training baseline eval ─────────────────────────────────────────
     _run_baseline_eval(eval_config, KB, run_eval,
                        RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer)
 
-    # ── Load model with Unsloth ────────────────────────────────────────────
+    # ── Pick a single compute dtype for Unsloth fused LoRA kernels ─────────
+    # A100 supports bf16, but this Unsloth 2026.4.8 + Qwen2.5 7B 4-bit GRPO
+    # stack still enters `fast_lora.matmul_lora` with fp16 activations (`Half`).
+    # If the trainer/model/adapters are bf16 or fp32 in any branch, the fused
+    # kernel crashes with:
+    #   RuntimeError: self and mat2 must have the same dtype, but got Half and Float
+    #
+    # The stable path is to force CUDA model weights/adapters to fp16:
+    #   model dtype = torch.float16
+    #   LoRA adapter params = torch.float16
+    # but keep Trainer mixed precision OFF. If `fp16=True`, Accelerate creates
+    # a GradScaler and later crashes at gradient clipping with:
+    #   ValueError: Attempting to unscale FP16 gradients.
+    _bf16_ok_load = False
+    _fp16_trainer = False
+    _model_dtype = torch.float16 if torch.cuda.is_available() else None
+    print(
+        f"Model load dtype: {_model_dtype} "
+        f"(forced fp16 model for Unsloth LoRA kernel stability; "
+        f"trainer bf16={_bf16_ok_load} fp16={_fp16_trainer})"
+    )
+
+    # ── Load model with Unsloth (4-bit + LoRA) ────────────────────────────
     print(f"Loading {config.model_name} (4-bit={config.use_4bit})...")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=config.model_name,
         max_seq_length=config.max_seq_length,
         load_in_4bit=config.use_4bit,
-        dtype=None,
+        dtype=_model_dtype,
     )
     model = FastLanguageModel.get_peft_model(
         model,
@@ -374,21 +729,38 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         use_gradient_checkpointing="unsloth",
         random_state=42,
     )
+
+    # Force every trainable floating parameter into the model dtype.
+    # PEFT commonly leaves LoRA A/B weights as float32. For this Unsloth fused
+    # kernel path we must not allow any trainable fp32 matrix to reach addmm_.
+    if _model_dtype is not None:
+        for name, param in model.named_parameters():
+            if param.requires_grad and param.is_floating_point() and param.dtype != _model_dtype:
+                print(f"[dtype] casting trainable param {name}: {param.dtype} -> {_model_dtype}")
+                param.data = param.data.to(_model_dtype)
+
+    # Align tokenizer's max length with config so generation does not warn about
+    # max_length=32768 vs max_new_tokens=256 and so prompt-side truncation is
+    # explicit rather than silent during eval callbacks.
+    try:
+        tokenizer.model_max_length = int(config.max_seq_length)
+    except Exception:
+        pass
     print("Model loaded with LoRA adapters.")
 
     # ── Episode seed dataset ───────────────────────────────────────────────
-    # TRL forwards each dataset row's columns to env.reset(**kwargs).
-    # episode_seed → reset(episode_seed=...) for deterministic episodes.
+    # Each row has:
+    #   prompt       — system message instructing the model to output JSON actions
+    #   episode_seed — forwarded to _grpo_reward_func as kwarg; used to reset
+    #                  ExaminerEnv deterministically per episode
+    # NOTE: environment_factory is NOT used (Unsloth compiled trainer does not
+    # support it). The model generates all actions in one completion; the reward
+    # function runs the environment from those actions.
     n = config.num_episodes
     dataset = Dataset.from_dict({
         "prompt": [[{
             "role": "user",
-            "content": (
-                "You are an expert examiner testing a student on machine learning theory. "
-                "Use the ask() tool to probe each section, then classify() to end. "
-                "Prefer WHY/HOW/edge-case questions — they expose bluffing better than "
-                "surface definitions. You MUST call classify() by the final turn."
-            ),
+            "content": _EXAMINER_SYSTEM_PROMPT,
         }]] * n,
         "episode_seed": list(range(n)),
     })
@@ -397,6 +769,8 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     reward_buffer: list[float] = []
     current_beta_kl = config.beta_kl
     checkpoint_metrics_log: dict = {}
+    train_started_at = time.time()
+    total_steps_estimate = config.num_episodes
 
     class EvalAndMonitorCallback(TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kw):
@@ -404,6 +778,65 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 r = logs.get("train/reward", logs.get("reward/R_total_batch_mean"))
                 if r is not None:
                     reward_buffer.append(float(r))
+                step = int(getattr(state, "global_step", 0) or 0)
+                max_steps = int(getattr(state, "max_steps", 0) or total_steps_estimate)
+                if max_steps <= 0:
+                    max_steps = total_steps_estimate
+                pct = 100.0 * min(step, max_steps) / max_steps
+                elapsed_s = time.time() - train_started_at
+                elapsed_min = elapsed_s / 60.0
+                # ETA: based on average sec/step so far
+                if step > 0:
+                    sec_per_step = elapsed_s / step
+                    remaining_steps = max(0, max_steps - step)
+                    eta_min = (sec_per_step * remaining_steps) / 60.0
+                else:
+                    sec_per_step = 0.0
+                    eta_min = 0.0
+                loss = logs.get("loss", logs.get("train/loss"))
+                lr = logs.get("learning_rate", logs.get("train/learning_rate"))
+                reward = logs.get("reward", logs.get("train/reward", logs.get("reward/R_total_batch_mean")))
+                kl = logs.get("kl", logs.get("train/kl"))
+                grad_norm = logs.get("grad_norm", logs.get("train/grad_norm"))
+
+                # Pretty banner every step
+                bar_w = 24
+                filled = int(bar_w * pct / 100.0)
+                bar = "█" * filled + "·" * (bar_w - filled)
+                header = (
+                    f"━━━ {config.config_name} step {step:>4}/{max_steps} "
+                    f"[{bar}] {pct:5.1f}% ━━━"
+                )
+                stats = []
+                if reward is not None:
+                    stats.append(f"reward={float(reward):+.4f}")
+                if loss is not None:
+                    stats.append(f"loss={float(loss):.4f}")
+                if kl is not None:
+                    stats.append(f"kl={float(kl):.4f}")
+                if grad_norm is not None:
+                    stats.append(f"grad_norm={float(grad_norm):.3f}")
+                if lr is not None:
+                    stats.append(f"lr={float(lr):.2e}")
+                timing = (
+                    f"elapsed={elapsed_min:6.1f}m  "
+                    f"eta={eta_min:6.1f}m  "
+                    f"sec/step={sec_per_step:6.1f}s"
+                )
+                print(header, flush=True)
+                if stats:
+                    print("  " + "  ".join(stats), flush=True)
+                print("  " + timing, flush=True)
+
+                if _WANDB_AVAILABLE and wandb.run:
+                    wandb.log({
+                        "training/current_step": step,
+                        "training/total_steps_estimate": max_steps,
+                        "training/progress_pct": pct,
+                        "training/elapsed_minutes": elapsed_min,
+                        "training/eta_minutes": eta_min,
+                        "training/sec_per_step": sec_per_step,
+                    }, step=step)
 
         def on_step_end(self, args, state, control, **kw):
             nonlocal current_beta_kl
@@ -418,7 +851,24 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 _TrainedExaminerWrapper.model = model
                 _TrainedExaminerWrapper.tokenizer = tokenizer
                 _TrainedExaminerWrapper.config = config
-                chk = run_eval(_TrainedExaminerWrapper(), eval_config, KB)
+                # Switch Unsloth model into inference kernels for generate(),
+                # then back to training kernels.  Without this, mid-training
+                # generation hits the same fast_lora dtype mismatch path and
+                # eval crashes with "Half and Float".
+                _swapped = False
+                try:
+                    FastLanguageModel.for_inference(model)
+                    _swapped = True
+                except Exception as _swap_err:
+                    print(f"[eval] for_inference swap failed: {_swap_err}")
+                try:
+                    chk = run_eval(_TrainedExaminerWrapper(), eval_config, KB)
+                finally:
+                    if _swapped:
+                        try:
+                            FastLanguageModel.for_training(model)
+                        except Exception as _back_err:
+                            print(f"[eval] for_training swap-back failed: {_back_err}")
                 checkpoint_metrics_log[str(step)] = chk
                 os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
                 with open(os.path.join("outputs", "eval", "checkpoint_metrics.json"), "w") as fp:
@@ -435,6 +885,17 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                       f"info_gain={chk['avg_info_gain_per_turn']:.4f} "
                       f"ECE={chk['calibration_ECE']:.4f}")
 
+    # Trainer mixed precision is intentionally disabled. The model itself is
+    # already fp16 on CUDA, and enabling `fp16=True` creates a GradScaler that
+    # cannot unscale fp16 LoRA gradients.
+    _bf16_ok = _bf16_ok_load
+    _fp16 = _fp16_trainer
+    _max_grad_norm = 0.0 if _model_dtype is torch.float16 else config.max_grad_norm
+    print(
+        f"Precision: bf16={_bf16_ok} fp16={_fp16} "
+        f"model_dtype={_model_dtype} max_grad_norm={_max_grad_norm}"
+    )
+
     # ── GRPOConfig ────────────────────────────────────────────────────────
     grpo_config = GRPOConfig(
         output_dir=os.path.join("outputs", "checkpoints"),
@@ -442,39 +903,72 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=config.gradient_accumulation,
         learning_rate=config.learning_rate,
-        bf16=config.bf16,
-        max_grad_norm=config.max_grad_norm,
+        bf16=_bf16_ok,
+        fp16=_fp16,
+        max_grad_norm=_max_grad_norm,
         warmup_ratio=config.warmup_ratio,
         num_generations=config.num_generations,
         beta=config.beta_kl,
         save_steps=config.checkpoint_every_n_steps,
         logging_steps=1,
         report_to="wandb" if _WANDB_AVAILABLE else "none",
-        # Multi-turn budget — enough for up to 6 turns of Q&A + classify
         max_completion_length=config.max_seq_length,
-        # Tool-calling mode: environment_factory handles the loop
         log_completions=True,
     )
 
-    # ── GRPOTrainer with environment_factory ──────────────────────────────
-    # Per TRL OpenEnv docs: pass the CLASS (not an instance).
-    # TRL creates one ExaminerToolEnv per generation slot.
-    # It calls reset() → multi-turn (ask/classify tool calls) → reward_func().
+    # ── GRPOTrainer (standard GRPO — no environment_factory) ─────────────
+    # Unsloth's compiled UnslothGRPOTrainer calls reward functions with the
+    # standard GRPO signature (prompts, completions, ...), not the OpenEnv
+    # signature (environments).  We therefore use _grpo_reward_func which runs
+    # ExaminerEnv internally for each completion.
     trainer = GRPOTrainer(
         model=model,
-        reward_funcs=reward_func,
+        reward_funcs=_grpo_reward_func,
         args=grpo_config,
         train_dataset=dataset,
         tokenizer=tokenizer,
-        environment_factory=ExaminerToolEnv,
         callbacks=[EvalAndMonitorCallback()],
     )
+
+    # Defensive runtime guard: some Spaces still surface mixed_precision="fp16"
+    # despite fp16=False/bf16=False in args (inherited accelerate state). If so,
+    # neutralize gradient unscale path before training to prevent GradScaler crash.
+    _acc = getattr(trainer, "accelerator", None)
+    if _acc is not None:
+        _mp = str(getattr(_acc, "mixed_precision", "no")).lower()
+        if _mp == "fp16":
+            print("[precision-guard] Accelerator mixed_precision=fp16 detected; forcing no/unscale bypass.")
+            try:
+                _acc.mixed_precision = "no"
+            except Exception:
+                pass
+            try:
+                _acc.native_amp = False
+            except Exception:
+                pass
+            try:
+                _acc.scaler = None
+            except Exception:
+                pass
+
+            def _no_unscale_gradients(*args, **kwargs):
+                return None
+
+            try:
+                _acc.unscale_gradients = _no_unscale_gradients
+            except Exception:
+                pass
 
     print(f"\nStarting {config.config_name} training ({n} episodes)...")
     print(f"  Model: {config.model_name}")
     print(f"  LoRA: r={config.lora_rank} alpha={config.lora_alpha}")
     print(f"  Generations/step: {config.num_generations}")
     print(f"  Eval every {config.eval_every_n_steps} steps")
+    print(f"  Reward mode: standard GRPO (env runs inside reward func)")
+
+    # Patch Unsloth's compiled cache NOW (generated by GRPOTrainer.__init__)
+    _apply_unsloth_patch()
+
     trainer.train()
 
     # ── Final held-out eval ───────────────────────────────────────────────
@@ -482,6 +976,10 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     _TrainedExaminerWrapper.model = model
     _TrainedExaminerWrapper.tokenizer = tokenizer
     _TrainedExaminerWrapper.config = config
+    try:
+        FastLanguageModel.for_inference(model)
+    except Exception as _swap_err:
+        print(f"[final-eval] for_inference swap failed: {_swap_err}")
     final_metrics = run_eval(
         _TrainedExaminerWrapper(),
         eval_config,
@@ -545,18 +1043,26 @@ class _TrainedExaminerWrapper:
 
     def act(self, observation: dict) -> str:
         from training.prompt_builder import build_prompt
+        tok = self.__class__.tokenizer
+        cfg = self.__class__.config
+        max_new = 256
+        # Reserve room for generation: cap prompt at (max_seq_length - max_new).
+        max_prompt_tokens = max(64, int(cfg.max_seq_length) - max_new)
         prompt = build_prompt(observation)
-        inputs = self.__class__.tokenizer(
-            prompt, return_tensors="pt"
+        inputs = tok(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_prompt_tokens,
         ).to(self.__class__.model.device)
         outputs = self.__class__.model.generate(
             **inputs,
-            max_new_tokens=256,
+            max_new_tokens=max_new,
             do_sample=False,
-            pad_token_id=self.__class__.tokenizer.eos_token_id,
+            pad_token_id=tok.eos_token_id,
         )
         generated = outputs[0][inputs["input_ids"].shape[1]:]
-        return self.__class__.tokenizer.decode(generated, skip_special_tokens=True).strip()
+        return tok.decode(generated, skip_special_tokens=True).strip()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

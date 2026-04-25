@@ -39,6 +39,9 @@ Thumbs.db
 # Colab checkpoints
 .ipynb_checkpoints/
 
+# Local Hugging Face Space git clone (deploy mirror; not part of main repo)
+_hf_space_bluffBuster/
+
 # Model weights (too large for repo — use HF Hub)
 *.bin
 *.safetensors
