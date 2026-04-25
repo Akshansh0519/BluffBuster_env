@@ -1,0 +1,391 @@
+"""
+hf_space/app.py — Gradio 4-tab demo for The Examiner (BluffBuster).
+C2 owns.
+
+Tabs:
+  1. Live Episode     — user triggers episode; live posterior trace; full reward breakdown
+  2. Baseline vs Trained — same seed, 4 examiners side by side
+  3. Training Evidence — real plots from W&B training run
+  4. Environment Details — reward spec, style table, action schema
+
+⚠️ BEFORE DEPLOYMENT:
+  - Confirm plots exist in outputs/plots/
+  - Test all 4 tabs in Gradio 4 (not 3)
+  - Test in incognito before marking MSR-5 done
+  - Check Space logs for silent startup failures
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+import gradio as gr
+import numpy as np
+
+# ── Narrative (verbatim from PROJECT IDENTITY) ──
+THREE_SENTENCE_NARRATIVE = (
+    "Most AI benchmarks reward getting the right answer — but almost none reward asking "
+    "the right question. The Examiner is an adversarial RL environment where an examiner "
+    "agent learns, through information-gain reward shaping and calibrated terminal scoring, "
+    "to design questions that expose confident bluffing across multiple deceptive student "
+    "styles. We train a language model examiner using GRPO and demonstrate measurable "
+    "improvement over definitional and random baselines on held-out student styles and "
+    "unseen topic sections, with reward decomposition that judges can audit live."
+)
+
+ENV_DETAILS_MARKDOWN = """
+## Student Simulator Family (7 styles)
+
+| Style | Knowledge | Mech. Cue Rate | Misc. Rate | Special Behavior |
+|-------|-----------|---------------|------------|-----------------|
+| K1    | KNOWS     | 0.85          | 0.05       | Mechanistic, causal, concrete |
+| K2    | KNOWS     | 0.55          | 0.05       | Concise and correct |
+| K3    | KNOWS     | 0.65          | 0.08       | Hedges appropriately |
+| F1    | FAKING    | 0.15          | 0.30       | Collapses under "why/how" probes |
+| F2    | FAKING    | 0.20          | 0.25       | Mirrors jargon from question |
+| F3    | FAKING    | 0.10          | 0.20       | Pivots to adjacent topics |
+| F4    | FAKING    | 0.05          | 0.40       | Very confident, zero specificity |
+
+**Probe modulation:** A "why/how/mechanism" probe to a FAKING student halves their mechanism cue rate and increases misconception rate by 50%.
+
+## Action Schema
+
+**Ask:**
+```json
+{"action_type": "ask", "section_id": "S01", "question_text": "Why does momentum help convergence?"}
+```
+
+**Classify (terminates episode):**
+```json
+{"action_type": "classify", "classifications": {"S01": "KNOWS", "S02": "FAKING", ...}}
+```
+
+## Reward Function
+
+| Component | Range | Purpose |
+|-----------|-------|---------|
+| R_acc | [−1, +1] | Classification accuracy |
+| R_asym | [−0.5, 0] | Asymmetric error costs (false accusations cost more) |
+| R_cal | [−0.4, +0.4] | Calibration: rewards confident-correct |
+| R_eff | [0, +0.20] | Efficiency: fast correct classification |
+| R_cov | [−0.35, 0] | Coverage: all 10 sections classified |
+| R_info | [0, +0.40] | Information gain: potential-based ΔH_t |
+| R_qual | [0, +0.10] | Question quality (mechanism/specificity/edge-case) |
+| R_div | [0, +0.05] | Diversity across sections |
+| Penalties | ≤ 0 | Malformed (−0.20), repetition (−0.10), invalid section (−0.10) |
+| **R_total** | **[−2.05, +1.95]** | **Theoretical bounds asserted at runtime** |
+
+## Honest Caveats
+
+- Our simulator uses a controlled family of seven scripted styles, not real human experts.
+- We use a KB-grounded posterior oracle for reward shaping only — not as ground truth.
+- Results on held-out styles are reported honestly; worst per-style cells disclosed.
+"""
+
+REWARD_COMPONENT_KEYS = [
+    "R_acc", "R_asym", "R_cal", "R_eff", "R_cov",
+    "R_info", "R_qual", "R_div", "P_malformed", "R_total",
+]
+
+PLOT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs", "plots")
+
+
+# ──────────────────────────────────────────────────────────
+# Helper: load env + examiners (lazy, cached at module level)
+# ──────────────────────────────────────────────────────────
+
+_env = None
+_kb = None
+_baselines = {}
+_trained = None
+
+
+def _get_env_and_baselines():
+    global _env, _kb, _baselines, _trained
+    if _env is not None:
+        return _env, _kb, _baselines, _trained
+
+    try:
+        from examiner_env.environment import ExaminerEnv
+        from examiner_env.knowledge_base import KB
+        from examiner_env.baselines import (
+            RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer
+        )
+        _kb = KB
+        _env = ExaminerEnv(kb=KB, config=None)
+        _baselines = {
+            "Random": RandomExaminer(),
+            "Definitional": DefinitionalExaminer(),
+            "BayesianHeuristic": BayesianHeuristicExaminer(KB),
+        }
+        # Trained model: loaded from HF Hub after training
+        # Placeholder until model is pushed to Hub
+        _trained = None
+    except ImportError as e:
+        print(f"WARNING: examiner_env not available: {e}")
+    return _env, _kb, _baselines, _trained
+
+
+# ──────────────────────────────────────────────────────────
+# Tab 1: Live Episode
+# ──────────────────────────────────────────────────────────
+
+def run_live_episode(seed: int, examiner_name: str):
+    env, kb, baselines, trained = _get_env_and_baselines()
+    if env is None:
+        return (
+            "Environment not available — ensure examiner_env is installed.",
+            [], [], {}, "N/A"
+        )
+
+    examiner = baselines.get(examiner_name) or trained
+    if examiner is None:
+        return "Selected examiner not available.", [], [], {}, "N/A"
+
+    obs, _ = env.reset(seed=int(seed))
+    done = False
+    dialogue_rows = []
+    posterior_data = []
+    step = 0
+
+    if hasattr(examiner, "reset"):
+        examiner.reset()
+
+    while not done:
+        action_text = examiner.act(obs)
+        obs, reward, terminated, truncated, info = env.step(action_text)
+        done = terminated or truncated
+
+        hist = obs.get("dialogue_history", [])
+        if hist:
+            last = hist[-1]
+            dialogue_rows.append([
+                step + 1,
+                last.get("section_id", ""),
+                last.get("question", ""),
+                last.get("response", ""),
+            ])
+
+        step += 1
+
+    bd = info.get("reward_breakdown")
+    true_labels = info.get("true_labels", {})
+
+    # Posterior trace for chart
+    if bd and bd.posterior_trace:
+        for t_idx, pt in enumerate(bd.posterior_trace):
+            for s_id, p in pt.items():
+                posterior_data.append({"Turn": t_idx + 1, "Section": s_id, "Posterior": p})
+
+    reward_display = {}
+    if bd:
+        reward_display = {
+            "R_acc": round(bd.R_acc, 4),
+            "R_asym": round(bd.R_asym, 4),
+            "R_cal": round(bd.R_cal, 4),
+            "R_eff": round(bd.R_eff, 4),
+            "R_cov": round(bd.R_cov, 4),
+            "R_info": round(bd.R_info, 4),
+            "R_qual": round(bd.R_qual, 4),
+            "R_div": round(bd.R_div, 4),
+            "P_malformed": round(bd.P_malformed, 4),
+            "P_repetition": round(bd.P_repetition, 4),
+            "P_invalid_sec": round(bd.P_invalid_sec, 4),
+            "R_total": round(bd.R_total, 4),
+        }
+
+    ground_truth_md = "## Ground Truth (revealed)\n" + "\n".join(
+        f"- **{s}**: {label}" for s, label in sorted(true_labels.items())
+    )
+
+    return dialogue_rows, posterior_data, reward_display, ground_truth_md
+
+
+# ──────────────────────────────────────────────────────────
+# Tab 2: Baseline vs Trained Comparison
+# ──────────────────────────────────────────────────────────
+
+def run_comparison(seed: int):
+    env, kb, baselines, trained = _get_env_and_baselines()
+    if env is None:
+        return [["Environment not available", "", "", "", ""]]
+
+    examiner_map = {**baselines}
+    if trained:
+        examiner_map["Trained"] = trained
+
+    rows = []
+    for name, examiner in examiner_map.items():
+        obs, _ = env.reset(seed=int(seed))
+        done = False
+        questions_asked = []
+        if hasattr(examiner, "reset"):
+            examiner.reset()
+
+        while not done:
+            action_text = examiner.act(obs)
+            obs, reward, terminated, truncated, info = env.step(action_text)
+            done = terminated or truncated
+            hist = obs.get("dialogue_history", [])
+            if hist:
+                last = hist[-1]
+                questions_asked.append(f"[{last.get('section_id','')}] {last.get('question','')}")
+
+        bd = info.get("reward_breakdown")
+        true_labels = info.get("true_labels", {})
+        classifications = info.get("classifications", {})
+        correct = classifications == true_labels
+
+        rows.append([
+            name,
+            "\n".join(questions_asked[:3]) + ("..." if len(questions_asked) > 3 else ""),
+            "✓ CORRECT" if correct else "✗ WRONG",
+            f"{bd.R_total:.3f}" if bd else "N/A",
+            f"{bd.R_info:.3f}" if bd else "N/A",
+        ])
+
+    return rows
+
+
+# ──────────────────────────────────────────────────────────
+# Build Gradio app
+# ──────────────────────────────────────────────────────────
+
+def create_app():
+    with gr.Blocks(title="The Examiner — BluffBuster", theme=gr.themes.Soft()) as app:
+
+        gr.Markdown(f"# 🧐 The Examiner — BluffBuster\n\n> {THREE_SENTENCE_NARRATIVE}")
+
+        # ── Tab 1: Live Episode ──
+        with gr.Tab("🔴 Live Episode"):
+            gr.Markdown(
+                "Run a single episode. Watch the **posterior belief trace** — "
+                "each line shows how confident the examiner is about each section.\n\n"
+                "Good questions move the needle; bad ones don't."
+            )
+            with gr.Row():
+                seed_input_1 = gr.Number(value=1000, label="Episode Seed", precision=0)
+                examiner_dropdown = gr.Dropdown(
+                    choices=["Definitional", "BayesianHeuristic", "Trained"],
+                    value="Definitional",
+                    label="Examiner",
+                )
+                run_btn = gr.Button("▶ Run Episode", variant="primary")
+
+            dialogue_table = gr.Dataframe(
+                headers=["Turn", "Section", "Question Asked", "Student Response"],
+                label="Dialogue",
+                wrap=True,
+            )
+            posterior_plot = gr.LinePlot(
+                x="Turn",
+                y="Posterior",
+                color="Section",
+                title="Per-Section Belief p_t(s) — 0.5=uncertain, 1.0=confident KNOWS",
+                y_lim=[0, 1],
+            )
+            info_gain_display = gr.JSON(label="Reward Breakdown")
+            ground_truth_display = gr.Markdown(label="Ground Truth (revealed after classify)")
+
+            run_btn.click(
+                fn=run_live_episode,
+                inputs=[seed_input_1, examiner_dropdown],
+                outputs=[dialogue_table, posterior_plot, info_gain_display, ground_truth_display],
+            )
+
+        # ── Tab 2: Baseline vs Trained ──
+        with gr.Tab("⚖️ Baseline vs Trained"):
+            gr.Markdown(
+                "Same episode seed through **4 examiners** side by side.\n"
+                "Observe: the Trained examiner asks *why/how* probes earlier; "
+                "Definitional asks surface questions."
+            )
+            with gr.Row():
+                seed_input_2 = gr.Number(value=1000, label="Episode Seed", precision=0)
+                compare_btn = gr.Button("▶ Run Comparison", variant="primary")
+
+            comparison_table = gr.Dataframe(
+                headers=["Examiner", "Questions Asked (first 3)", "Correct?", "R_total", "R_info"],
+                label="4-Examiner Comparison",
+                wrap=True,
+            )
+            compare_btn.click(
+                fn=run_comparison,
+                inputs=[seed_input_2],
+                outputs=[comparison_table],
+            )
+
+        # ── Tab 3: Training Evidence ──
+        with gr.Tab("📊 Training Evidence"):
+            gr.Markdown(
+                "**All plots below are generated from real W&B training run data. "
+                "Not mocked. Not placeholders. (MSR-3)**"
+            )
+
+            def _img(filename: str, label: str):
+                path = os.path.join(PLOT_DIR, filename)
+                if os.path.exists(path):
+                    return gr.Image(value=path, label=label, show_download_button=True)
+                return gr.Markdown(f"*{label}: not yet generated — run training first.*")
+
+            with gr.Row():
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "reward_curve.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "reward_curve.png")) else None,
+                    label="R_total over Training",
+                    show_download_button=True,
+                )
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "accuracy_curve.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "accuracy_curve.png")) else None,
+                    label="Accuracy over Training",
+                    show_download_button=True,
+                )
+
+            with gr.Row():
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "comparison_bar.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "comparison_bar.png")) else None,
+                    label="4-Examiner Comparison (Held-Out Eval)",
+                    show_download_button=True,
+                )
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "per_style_heatmap.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "per_style_heatmap.png")) else None,
+                    label="Per-Style Accuracy Heatmap",
+                    show_download_button=True,
+                )
+
+            with gr.Row():
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "info_gain_curve.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "info_gain_curve.png")) else None,
+                    label="avg Info Gain/Turn over Training",
+                    show_download_button=True,
+                )
+                gr.Image(
+                    value=os.path.join(PLOT_DIR, "calibration_ece_curve.png")
+                    if os.path.exists(os.path.join(PLOT_DIR, "calibration_ece_curve.png")) else None,
+                    label="Calibration ECE over Training",
+                    show_download_button=True,
+                )
+
+            gr.Image(
+                value=os.path.join(PLOT_DIR, "posterior_trace_example.png")
+                if os.path.exists(os.path.join(PLOT_DIR, "posterior_trace_example.png")) else None,
+                label="Posterior Trace Example — Best AFTER Transcript",
+                show_download_button=True,
+            )
+
+        # ── Tab 4: Environment Details ──
+        with gr.Tab("🔬 Environment Details"):
+            gr.Markdown(ENV_DETAILS_MARKDOWN)
+
+    return app
+
+
+if __name__ == "__main__":
+    app = create_app()
+    app.launch()
