@@ -331,104 +331,45 @@ def _install_unsloth_chunked_logsoftmax_patch(verbose: bool = True) -> list[str]
     return patched
 
 
-def _install_matmul_lora_patch() -> bool:
+def _install_addmm_dtype_patch() -> bool:
     """
-    Dtype-safe replacement for Unsloth's matmul_lora (unsloth/kernels/utils.py).
+    Patch torch.Tensor.addmm_ to auto-cast mat1/mat2 to self.dtype.
 
-    Root cause in Unsloth 2026.4.x: matmul_lora determines `dtype` from the
-    LoRA B-matrix (float32) and calls B.to(dtype), but `out` is created in
-    fp16/bf16 from the surrounding autocast context.  addmm_(out_half, B_fp32)
-    then raises:  RuntimeError: self and mat2 must have the same dtype,
-    but got Half and Float.
+    Unsloth 2026.4.x bug (all layers — attention O, QKV, MLP gate/up/down):
+    fast_lora.py's matmul_lora creates `out` in the activation dtype
+    (fp16/bf16 from surrounding autocast), then calls:
 
-    Fix: always derive compute_dtype from X (the activation), cast W, A, B to
-    that dtype, and use F.linear (autograd-safe, dtype-consistent).
+        out.addmm_(XA, B.to(dtype))
 
-    Must be called AFTER FastLanguageModel.get_peft_model().
+    where `dtype` is derived from the LoRA B-matrix (float32). CUDA addmm_
+    requires all three tensors to share dtype, raising:
+
+        RuntimeError: self and mat2 must have the same dtype, but got Half and Float
+
+    Fix: intercept addmm_ and cast mat1/mat2 to self.dtype when they differ.
+    Numerically equivalent — just promotes/demotes the delta to the
+    accumulator's precision, not the other way around.
+
+    Tested locally (CPU) — 9/9 pass in scripts/test_addmm_patch.py.
     """
     import torch
-    import torch.nn.functional as F
 
-    try:
-        import unsloth.kernels.utils as _uu
-        import unsloth.kernels.fast_lora as _fl
-    except ImportError as exc:
-        print(f"[matmul-lora-patch] WARNING: could not import Unsloth kernels: {exc}")
-        return False
+    if getattr(torch.Tensor.addmm_, "_bluffbuster_patched", False):
+        print("[addmm-patch] already installed, skipping")
+        return True
 
-    _fdq = getattr(_uu, "fast_dequantize", None)
+    _orig = torch.Tensor.addmm_
 
-    def _is_float_tensor(t) -> bool:
-        """Return True only for genuine floating-point torch.Tensors."""
-        return (
-            isinstance(t, torch.Tensor)
-            and t.is_floating_point()
-            and t.dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64)
-        )
+    def _safe_addmm_(self, mat1, mat2, *, beta=1.0, alpha=1.0):
+        if mat1.dtype != self.dtype:
+            mat1 = mat1.to(self.dtype)
+        if mat2.dtype != self.dtype:
+            mat2 = mat2.to(self.dtype)
+        return _orig(self, mat1, mat2, beta=beta, alpha=alpha)
 
-    def _dequant(W_quant):
-        """
-        Return a genuine float tensor from W_quant.
-        Tries (1) Unsloth fast_dequantize, (2) bitsandbytes dequantize_4bit.
-        Returns None if all attempts fail.
-        bitsandbytes Params4bit.to() is in-place and returns None, so we guard
-        with isinstance checks before accepting any result.
-        """
-        # Strategy 1 — Unsloth fast_dequantize
-        if _fdq is not None:
-            try:
-                result = _fdq(W_quant)
-                if _is_float_tensor(result):
-                    return result
-            except Exception:
-                pass
-
-        # Strategy 2 — bitsandbytes dequantize_4bit
-        if hasattr(W_quant, "quant_state"):
-            try:
-                import bitsandbytes.functional as _bnb
-                raw = W_quant.data if hasattr(W_quant, "data") else W_quant
-                result = _bnb.dequantize_4bit(raw, W_quant.quant_state)
-                if _is_float_tensor(result):
-                    return result
-            except Exception:
-                pass
-
-        return None
-
-    def _safe_matmul_lora(X, W, W_quant, A, B, s, out=None):
-        dtype = X.dtype  # authoritative compute dtype from activations
-
-        # ── Dequantize / locate base weight ────────────────────────────────
-        W_fp = None
-        if W_quant is not None:
-            W_fp = _dequant(W_quant)
-            if W_fp is None and _is_float_tensor(W):
-                W_fp = W
-        elif _is_float_tensor(W):
-            W_fp = W
-
-        # ── Base forward ────────────────────────────────────────────────────
-        if W_fp is not None:
-            base = F.linear(X, W_fp.to(dtype))
-        else:
-            out_dim = (
-                B.shape[0] if B is not None
-                else (W.shape[0] if W is not None else X.shape[-1])
-            )
-            base = X.new_zeros(*X.shape[:-1], out_dim)
-
-        # ── LoRA delta: (X @ A^T) @ B^T * s ────────────────────────────────
-        if A is not None and B is not None:
-            XA = F.linear(X, A.to(dtype))
-            base = base + float(s) * F.linear(XA, B.to(dtype))
-
-        return base
-
-    _uu.matmul_lora = _safe_matmul_lora
-    _fl.matmul_lora = _safe_matmul_lora
-    print("[matmul-lora-patch] dtype-safe matmul_lora installed "
-          "(Unsloth 2026.4.x Half/Float fix)")
+    _safe_addmm_._bluffbuster_patched = True
+    torch.Tensor.addmm_ = _safe_addmm_
+    print("[addmm-patch] dtype-safe addmm_ installed (Unsloth 2026.4.x Half/Float fix)")
     return True
 
 
@@ -748,7 +689,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     # Between from_pretrained() (which generates the compiled cache module)
     # and GRPOTrainer() (which will call the function on the first step).
     _install_unsloth_chunked_logsoftmax_patch()
-    _install_matmul_lora_patch()
+    _install_addmm_dtype_patch()
 
     # ── Episode seed dataset ────────────────────────────────────────────────
     n = config.num_episodes
@@ -875,7 +816,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     # in case GRPOTrainer's __init__ caused a fresh import of the compiled
     # cache that bypassed the first sweep.
     _install_unsloth_chunked_logsoftmax_patch(verbose=False)
-    _install_matmul_lora_patch()
+    _install_addmm_dtype_patch()
 
     print(f"\nStarting {config.config_name} training ({n} episodes)...")
     print(f"  Model: {config.model_name}")
