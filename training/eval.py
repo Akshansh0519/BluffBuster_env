@@ -50,6 +50,29 @@ def compute_brier(posteriors: list[float], labels: list[int]) -> float:
 
 
 # ---------------------------------------------------------------------------
+# NaN-tolerant aggregators
+# ---------------------------------------------------------------------------
+# An untrained / weak examiner can produce non-finite per-step values:
+#   - posterior pinned at 0 or 1 -> log(0) -> -inf in info_gain_per_turn
+#   - episode that classifies on turn 1 with no asks -> empty info_gain list
+#   - parse failures -> reward components computed from default state
+# These are legitimate signals about a weak examiner — they should NOT crash
+# the eval. We strip non-finite values before averaging and fall back to 0.0
+# when the resulting list is empty, so headline metrics stay finite while
+# still reflecting the weakness through false_accusation_rate, parse_failure_rate,
+# reward_mean, etc.
+
+def _safe_mean(values: list[float]) -> float:
+    finite = [float(v) for v in values if np.isfinite(v)]
+    return float(np.mean(finite)) if finite else 0.0
+
+
+def _safe_std(values: list[float]) -> float:
+    finite = [float(v) for v in values if np.isfinite(v)]
+    return float(np.std(finite)) if finite else 0.0
+
+
+# ---------------------------------------------------------------------------
 # Main eval runner — STUB until C1 Phase 1 gate clears
 # ---------------------------------------------------------------------------
 
@@ -208,17 +231,17 @@ def run_eval(
         },
         "false_accusation_rate": false_accusations / max(total_classified, 1),
         "false_exoneration_rate": false_exonerations / max(total_classified, 1),
-        "avg_turns_to_classify": float(np.mean(all_turns)) if all_turns else float("nan"),
-        "avg_info_gain_per_turn": float(np.mean(all_info_gains)) if all_info_gains else float("nan"),
+        "avg_turns_to_classify": _safe_mean(all_turns),
+        "avg_info_gain_per_turn": _safe_mean(all_info_gains),
         "terminal_posterior_correctness": posterior_correct / max(posterior_total, 1),
-        "calibration_ECE": compute_ece(all_posteriors, all_labels_binary),
-        "calibration_brier": compute_brier(all_posteriors, all_labels_binary),
-        "mean_R_qual": float(np.mean(all_r_qual)) if all_r_qual else float("nan"),
-        "mean_R_info": float(np.mean(all_r_info)) if all_r_info else float("nan"),
-        "mean_R_cal": float(np.mean(all_r_cal)) if all_r_cal else float("nan"),
+        "calibration_ECE": _safe_mean([compute_ece(all_posteriors, all_labels_binary)]),
+        "calibration_brier": _safe_mean([compute_brier(all_posteriors, all_labels_binary)]),
+        "mean_R_qual": _safe_mean(all_r_qual),
+        "mean_R_info": _safe_mean(all_r_info),
+        "mean_R_cal": _safe_mean(all_r_cal),
         "parse_failure_rate": total_malformed / max(total_steps, 1),
-        "reward_mean": float(np.mean(all_rewards)) if all_rewards else float("nan"),
-        "reward_std": float(np.std(all_rewards)) if all_rewards else float("nan"),
+        "reward_mean": _safe_mean(all_rewards),
+        "reward_std": _safe_std(all_rewards),
         "per_style_accuracy": {
             style: float(np.mean(vals)) for style, vals in style_correct.items()
         },
