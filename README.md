@@ -1,3 +1,14 @@
+---
+title: BluffBuster — The Examiner
+emoji: 🧠
+colorFrom: indigo
+colorTo: purple
+sdk: gradio
+sdk_version: "5.29.1"
+app_file: app.py
+pinned: false
+---
+
 # The Examiner — Can an AI Learn to Expose Bluffing?
 
 **Project foundation (specs, plans, guardrails):** see the [`FOUNDATION/`](FOUNDATION/) folder — `guardrails.md`, `architecture.md`, `implementation_plan.md`, coder playbooks, merge procedure, and the source `Base propmt.txt`. `mistakes.md` in that folder is gitignored and stays local only.
