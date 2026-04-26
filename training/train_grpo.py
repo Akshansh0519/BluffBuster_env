@@ -659,6 +659,24 @@ def _hub_get_latest_step(repo_id: str, token: str) -> tuple[int, str | None]:
         return 0, None
 
 
+def _hub_peek_training_state(
+    repo_id: str, token: str, folder_name: str,
+) -> dict | None:
+    """Download only ``training_state.json`` from a Hub checkpoint folder."""
+    try:
+        from huggingface_hub import hf_hub_download as _dl
+        _path = _dl(
+            repo_id=repo_id,
+            repo_type="model",
+            filename=f"{folder_name}/training_state.json",
+            token=token,
+        )
+        with open(_path, encoding="utf-8") as _f:
+            return json.load(_f)
+    except Exception:
+        return None
+
+
 def _hub_restore_lora(
     model,
     repo_id: str,
@@ -879,26 +897,54 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         _latest_step, _latest_folder = _hub_get_latest_step(
             _repo_id_startup, _hf_token_startup
         )
-        if _latest_step > 0:
-            print(f"[resume] Found checkpoint at step {_latest_step}, restoring...")
-            _lora_local = os.path.join(
-                "outputs", "checkpoints", f"lora-step-{_latest_step}"
+        if _latest_step > 0 and _latest_folder:
+            _peek = _hub_peek_training_state(
+                _repo_id_startup, _hf_token_startup, _latest_folder
             )
-            _ts = _hub_restore_lora(
-                model,
-                _repo_id_startup,
-                _hf_token_startup,
-                _latest_folder,
-                _lora_local,
-            )
-            if _ts is not None:
-                _resume_step   = _ts.get("step", _latest_step)
-                _start_episode = _ts.get("episodes_consumed", _resume_step * config.batch_size)
-                _resumed_rewards = _ts.get("reward_buffer", [])
-                print(f"[resume] Resumed from step {_resume_step}, "
-                      f"episode {_start_episode}")
-            else:
-                print("[resume] Adapter load failed — starting from scratch")
+            _skip_resume = False
+            if _peek:
+                _saved_cfg = _peek.get("config_name")
+                if _saved_cfg and _saved_cfg != config.config_name:
+                    print(
+                        f"[resume] Hub checkpoint is for `{_saved_cfg}` but you "
+                        f"selected `{config.config_name}` — starting fresh "
+                        f"(LoRA shapes / weights are not compatible across configs)."
+                    )
+                    _skip_resume = True
+                _saved_model = _peek.get("model_name")
+                if (
+                    not _skip_resume
+                    and _saved_model
+                    and _saved_model != config.model_name
+                ):
+                    print(
+                        f"[resume] Hub checkpoint used `{_saved_model}` but this "
+                        f"run uses `{config.model_name}` — starting fresh."
+                    )
+                    _skip_resume = True
+            if not _skip_resume:
+                print(f"[resume] Found checkpoint at step {_latest_step}, restoring...")
+                _lora_local = os.path.join(
+                    "outputs", "checkpoints", f"lora-step-{_latest_step}"
+                )
+                _ts = _hub_restore_lora(
+                    model,
+                    _repo_id_startup,
+                    _hf_token_startup,
+                    _latest_folder,
+                    _lora_local,
+                )
+                if _ts is not None:
+                    _resume_step = _ts.get("step", _latest_step)
+                    _start_episode = _ts.get(
+                        "episodes_consumed",
+                        _resume_step * config.batch_size,
+                    )
+                    _resumed_rewards = _ts.get("reward_buffer", [])
+                    print(f"[resume] Resumed from step {_resume_step}, "
+                          f"episode {_start_episode}")
+                else:
+                    print("[resume] Adapter load failed — starting from scratch")
         else:
             print("[resume] No Hub checkpoint found — starting fresh")
     else:
@@ -994,6 +1040,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                     "step": step,
                     "episodes_consumed": _episodes_consumed,
                     "config_name": config.config_name,
+                    "model_name": config.model_name,
                     "reward_buffer": reward_buffer[-200:],  # last 200 only
                 }
                 try:
