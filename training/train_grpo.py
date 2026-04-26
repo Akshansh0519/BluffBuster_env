@@ -818,8 +818,10 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     print(f"Oracle calibration OK (Brier={brier:.4f})")
 
     # ── Pre-training baseline eval ──────────────────────────────────────────
+    # Use only 5 episodes for a fast sanity check (not a full 50-ep run).
+    _baseline_eval_cfg = {**eval_config, "num_episodes": 5}
     _run_baseline_eval(
-        eval_config, KB, run_eval,
+        _baseline_eval_cfg, KB, run_eval,
         RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer,
     )
 

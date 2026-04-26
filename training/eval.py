@@ -93,6 +93,9 @@ def run_eval(
         )
 
     seeds = eval_config["seeds"]
+    # Respect num_episodes limit when provided (used by fast checkpoint evals)
+    _n_limit = eval_config.get("num_episodes", len(seeds))
+    seeds = seeds[:_n_limit]
 
     # Accumulation buffers
     all_rewards: list[float] = []

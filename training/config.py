@@ -116,11 +116,11 @@ FULL_CONFIG = TrainingConfig(
     config_name="FULL",
     sections=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10"],
     max_turns=4,
-    num_episodes=300,
+    num_episodes=200,
     fake_styles_train=["F1", "F2", "F3"],
     eval_styles_held_out=["F4"],
     held_out_sections=["S09", "S10"],
-    eval_episodes=60,
+    eval_episodes=10,
     model_name="Qwen/Qwen2.5-7B-Instruct",
     lora_rank=16,
     lora_alpha=32,
@@ -138,7 +138,7 @@ FULL_CONFIG = TrainingConfig(
     max_grad_norm=1.0,
     warmup_ratio=0.05,
     checkpoint_every_n_steps=25,
-    eval_every_n_steps=25,
+    eval_every_n_steps=9999,
 )
 
 # ──────────────────────────────────────────────────────────
