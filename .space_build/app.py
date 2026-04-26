@@ -152,6 +152,169 @@ def _estimate_total_steps(config_name: str) -> int:
     }.get(config_name, 0)
 
 
+def launch_baseline_stream(limit: int, max_new_tokens: int):
+    """
+    Generator — streams the dumb-baseline run logs to a Gradio Textbox.
+
+    Runs `scripts.run_dumb_baseline.main` in a background thread with the
+    requested limit/tokens; redirects stdout/stderr into a queue exactly
+    like launch_training_stream(). Returns the path to the comparison
+    plot via a final "[done]" sentinel that the caller picks up.
+    """
+    log_q: queue.Queue = queue.Queue()
+    error_box: list = [None]
+    done_flag: list = [False]
+
+    def _run():
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        writer = _QueueWriter(log_q)
+        sys.stdout = sys.stderr = writer
+        try:
+            os.makedirs("outputs/eval", exist_ok=True)
+            os.makedirs("outputs/plots", exist_ok=True)
+
+            from training.dumb_examiner import load_dumb_examiner
+            from training.eval import run_eval
+            from examiner_env.knowledge_base import KB
+            from scripts.compare_baselines import build_comparison
+
+            with open("eval_config.json") as f:
+                eval_cfg = json.load(f)
+            seeds = eval_cfg["seeds"]
+            n = max(1, min(int(limit), len(seeds)))
+            eval_cfg = {**eval_cfg, "seeds": seeds[:n]}
+            print(f"[baseline] Using first {n} seeds (of {len(seeds)} available).")
+
+            print(f"[baseline] Loading Qwen/Qwen2.5-1.5B-Instruct (4-bit)...")
+            t0 = time.time()
+            examiner = load_dumb_examiner(
+                model_name="Qwen/Qwen2.5-1.5B-Instruct",
+                max_seq_length=1024,
+                use_4bit=True,
+                max_new_tokens=int(max_new_tokens),
+            )
+            print(f"[baseline] Model loaded in {time.time() - t0:.1f}s.")
+
+            print(f"[baseline] Running eval on {n} seeds "
+                  f"(no LoRA, no training)...")
+            t1 = time.time()
+            out_path = "outputs/eval/dumb_baseline_metrics.json"
+            metrics = run_eval(examiner, eval_cfg, KB, output_path=out_path)
+            print(f"[baseline] Eval finished in {time.time() - t1:.1f}s.")
+
+            print("\n=== UNTRAINED 1.5B BASELINE ===")
+            for k in ["classification_accuracy", "avg_info_gain_per_turn",
+                      "false_accusation_rate", "reward_mean",
+                      "calibration_ECE", "parse_failure_rate"]:
+                print(f"  {k:<28}: {metrics.get(k, float('nan')):+.4f}")
+
+            print("\n[baseline] Generating comparison artifacts...")
+            cmp = build_comparison()
+            print(f"[baseline] Plot   : {cmp['plot_path']}")
+            print(f"[baseline] Table  : {cmp['table_path']}")
+            print(f"[baseline] Sources present: {cmp['n_sources']}/4")
+
+            token = os.environ.get("HF_TOKEN")
+            if token:
+                try:
+                    from huggingface_hub import HfApi, create_repo
+                    repo_id = os.environ.get(
+                        "CHECKPOINT_REPO",
+                        "Samarth1401/bluffbuster-checkpoints",
+                    )
+                    api = HfApi(token=token)
+                    try:
+                        create_repo(repo_id=repo_id, token=token,
+                                    private=True, repo_type="model",
+                                    exist_ok=True)
+                    except Exception:
+                        pass
+                    api.upload_file(
+                        path_or_fileobj=out_path,
+                        path_in_repo="dumb_baseline/dumb_baseline_metrics.json",
+                        repo_id=repo_id, repo_type="model", token=token,
+                        commit_message="dumb baseline metrics",
+                    )
+                    print(f"[baseline] Uploaded metrics to {repo_id}")
+                except Exception as e:
+                    print(f"[baseline] Hub upload failed ({e!r})")
+            else:
+                print("[baseline] HF_TOKEN not set — local file only.")
+
+        except Exception:
+            error_box[0] = _tb.format_exc()
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            done_flag[0] = True
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    accumulated = ""
+    start_time = time.time()
+    while not done_flag[0] or not log_q.empty():
+        batch = []
+        try:
+            while True:
+                batch.append(log_q.get_nowait())
+        except queue.Empty:
+            pass
+        if batch:
+            accumulated += "".join(batch)
+        elapsed = int(time.time() - start_time)
+        mins, secs = divmod(elapsed, 60)
+        header = (
+            f"╔══ Untrained 1.5B Baseline  "
+            f"{'RUNNING' if not done_flag[0] else 'DONE'}  "
+            f"elapsed {mins:02d}:{secs:02d}\n"
+            f"║   limit={limit}  max_new_tokens={max_new_tokens}\n"
+            f"╚══════════════════════════════════════════════\n\n"
+        )
+        yield header + accumulated
+        if done_flag[0] and log_q.empty():
+            break
+        time.sleep(0.6)
+
+    elapsed = int(time.time() - start_time)
+    mins, secs = divmod(elapsed, 60)
+    if error_box[0]:
+        accumulated += (
+            f"\n{'='*60}\nFAILED after {mins:02d}:{secs:02d}\n"
+            f"{'='*60}\n{error_box[0]}"
+        )
+    else:
+        accumulated += (
+            f"\n{'='*60}\n"
+            f"COMPLETE in {mins:02d}:{secs:02d}\n"
+            f"{'='*60}\n"
+            f"Open the **Comparison** tab and click Refresh to view the\n"
+            f"4-way bar chart and metrics table.\n"
+        )
+    yield accumulated
+
+
+def refresh_comparison():
+    """Regenerate plot + table from whatever JSONs exist on disk."""
+    try:
+        from scripts.compare_baselines import build_comparison
+        result = build_comparison()
+        plot_path = result["plot_path"]
+        table_md = "## Examiner Comparison\n\n" + result["table"]
+        sources = ", ".join(result["sources"]) or "(none yet)"
+        status = (
+            f"**Sources present ({result['n_sources']}/4):** {sources}\n\n"
+            f"Run order: classical baselines auto-populate when training "
+            f"starts; **Dumb LLM** comes from the **Baseline (GPU)** tab; "
+            f"**Trained LLM** comes from the **Train (GPU)** tab when a "
+            f"FAST/FULL run completes."
+        )
+        plot = plot_path if plot_path and os.path.exists(plot_path) else None
+        return plot, table_md, status
+    except Exception as exc:
+        return None, f"```\n{_tb.format_exc()}\n```", f"Error: {exc}"
+
+
 def launch_training_stream(config_name: str):
     """
     Generator — yields live log text to gr.Textbox.
@@ -467,6 +630,76 @@ def create_app():
                 fn=launch_training_stream,
                 inputs=[cfg_dd],
                 outputs=[train_out],
+            )
+
+        # ── Tab 5: Baseline (GPU) — untrained 1.5B baseline runner ──
+        with gr.Tab("Baseline (GPU)"):
+            gr.Markdown(
+                "## Untrained 1.5B Baseline (the LLM 'before' row)\n\n"
+                "Runs **the same Qwen2.5-1.5B-Instruct, the same prompt builder, "
+                "the same env, the same seeds** — but with **NO LoRA** and "
+                "**no GRPO training**. This is the scientifically-correct "
+                "baseline to compare your trained model against, because the "
+                "only varying factor is the GRPO LoRA delta.\n\n"
+                "Defaults are tuned for **<10 min on A10G**:\n\n"
+                "| Knob | Default | Why |\n"
+                "|------|---------|-----|\n"
+                "| `limit` (eval seeds) | 15 | Matches FAST_CONFIG.eval_episodes; "
+                "subset of the full 50-seed suite (seed-matched). |\n"
+                "| `max_new_tokens` | 64 | Enough for one valid ASK/CLASSIFY "
+                "JSON; halves wall-clock vs 128. |\n"
+                "| model | Qwen2.5-1.5B-Instruct | Same as `FAST_CONFIG`. |\n"
+                "| precision | 4-bit | Same as training. |\n\n"
+                "After the run completes, click **Refresh** in the "
+                "**Comparison** tab to see the 4-way bar chart."
+            )
+            with gr.Row():
+                bl_limit = gr.Slider(
+                    minimum=5, maximum=50, step=5, value=15,
+                    label="Eval seeds (--limit)",
+                )
+                bl_tokens = gr.Slider(
+                    minimum=32, maximum=256, step=16, value=64,
+                    label="max_new_tokens",
+                )
+            bl_btn = gr.Button("Run Untrained Baseline", variant="primary",
+                               size="lg")
+            bl_out = gr.Textbox(
+                label="Live Baseline Log",
+                lines=24, max_lines=50, interactive=False,
+                placeholder=(
+                    "Click Run Untrained Baseline to start.\n\n"
+                    "Phases:\n"
+                    "  1. Load Qwen2.5-1.5B-Instruct (4-bit, ~1-2 min)\n"
+                    "  2. Run frozen eval on N seeds (~3-6 min)\n"
+                    "  3. Save outputs/eval/dumb_baseline_metrics.json\n"
+                    "  4. Build 4-way comparison plot + table\n"
+                    "  5. Upload metrics to HF Hub (if HF_TOKEN set)"
+                ),
+            )
+            bl_btn.click(
+                fn=launch_baseline_stream,
+                inputs=[bl_limit, bl_tokens],
+                outputs=[bl_out],
+            )
+
+        # ── Tab 6: Comparison — 4-way bar + table ──
+        with gr.Tab("Comparison"):
+            gr.Markdown(
+                "## 4-way Examiner Comparison\n\n"
+                "Pulls in whatever metric files exist on disk and renders the "
+                "bar chart + markdown table. Re-click **Refresh** after "
+                "running the **Baseline (GPU)** tab and after a training run "
+                "completes."
+            )
+            cmp_btn = gr.Button("Refresh Comparison", variant="primary")
+            cmp_status = gr.Markdown()
+            cmp_plot = gr.Image(label="four_way_comparison.png", type="filepath")
+            cmp_table = gr.Markdown()
+            cmp_btn.click(
+                fn=refresh_comparison,
+                inputs=[],
+                outputs=[cmp_plot, cmp_table, cmp_status],
             )
 
     return app
