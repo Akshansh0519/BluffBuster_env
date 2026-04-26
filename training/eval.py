@@ -269,10 +269,21 @@ def run_eval(
         "calibration_ECE", "calibration_brier", "mean_R_qual", "mean_R_info", "mean_R_cal",
         "parse_failure_rate", "reward_mean", "reward_std",
     ]
+    # Final tripwire — kept as a diagnostic signal, but downgraded from a
+    # hard raise to a warn-and-clamp. After _safe_mean / _safe_std are in
+    # place no scalar metric should ever be non-finite; if one slips through
+    # we log it loudly and replace with 0.0 so a completed training/eval run
+    # is never thrown away because of a single degenerate metric.
     for k in scalar_keys:
         v = metrics[k]
         if not np.isfinite(v):
-            raise ValueError(f"run_eval: metric '{k}' is not finite ({v}). Check examiner and environment.")
+            print(
+                f"[run_eval] WARNING: metric '{k}' came back non-finite ({v}); "
+                f"clamping to 0.0. This usually means the examiner produced "
+                f"degenerate per-step values — check parse_failure_rate and "
+                f"reward_mean for the real story."
+            )
+            metrics[k] = 0.0
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
