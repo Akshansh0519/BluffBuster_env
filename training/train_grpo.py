@@ -889,9 +889,18 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     _resumed_rewards: list[float] = []
 
     _hf_token_startup = os.environ.get("HF_TOKEN")
-    _repo_id_startup  = os.environ.get(
-        "CHECKPOINT_REPO", "Samarth1401/bluffbuster-checkpoints"
-    )
+    _repo_id_startup  = os.environ.get("CHECKPOINT_REPO", "")
+    if not _repo_id_startup and _hf_token_startup:
+        try:
+            from huggingface_hub import HfApi as _HfApi
+            _hf_username = _HfApi(token=_hf_token_startup).whoami()["name"]
+            _repo_id_startup = f"{_hf_username}/bluffbuster-checkpoints"
+            print(f"[resume] Auto-detected checkpoint repo: {_repo_id_startup}")
+        except Exception as _e:
+            _repo_id_startup = "bluffbuster-checkpoints"
+            print(f"[resume] Could not detect HF username ({_e}), using: {_repo_id_startup}")
+    elif not _repo_id_startup:
+        _repo_id_startup = "bluffbuster-checkpoints"
     if _hf_token_startup:
         print(f"[resume] Scanning HF Hub for checkpoints in {_repo_id_startup}...")
         _latest_step, _latest_folder = _hub_get_latest_step(
@@ -1054,10 +1063,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 # 30-90 sec on HF Spaces — keeping it synchronous was the main
                 # cause of the 6× training slowdown observed in the DEMO run).
                 _hf_token = os.environ.get("HF_TOKEN")
-                _repo_id  = os.environ.get(
-                    "CHECKPOINT_REPO",
-                    "Samarth1401/bluffbuster-checkpoints",
-                )
+                _repo_id  = _repo_id_startup  # reuse auto-detected repo from startup
                 if _hf_token and os.path.isdir(lora_dir):
                     import threading as _threading
                     _upload_dir   = lora_dir
