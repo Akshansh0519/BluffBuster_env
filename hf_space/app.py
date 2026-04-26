@@ -453,7 +453,7 @@ def create_app():
                     # Keep final eval reliable but bounded for hackathon time budget.
                     # Train code still supports full 50-episode final eval when unset.
                     if config_name == "DEMO":
-                        os.environ.setdefault("FINAL_EVAL_EPISODES", "20")
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "10")
                     elif config_name == "FULL":
                         # Keep FULL bounded for deadline-safe runs on Spaces.
                         os.environ.setdefault("FINAL_EVAL_EPISODES", "30")
