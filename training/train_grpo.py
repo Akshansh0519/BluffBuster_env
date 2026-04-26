@@ -1104,9 +1104,9 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
             # CRITICAL: torch.cuda.empty_cache() after eval prevents VRAM
             # fragmentation that caused 6× training slowdown in the DEMO run.
             if step % config.eval_every_n_steps == 0:
-                _ckpt_eval_episodes = min(10, config.eval_episodes)
+                _ckpt_eval_episodes = min(3, config.eval_episodes)
                 print(f"\n[step {step}] Checkpoint eval "
-                      f"({_ckpt_eval_episodes} episodes)...")
+                      f"({_ckpt_eval_episodes} episodes — fast pulse check)...")
                 _TrainedExaminerWrapper.model = model
                 _TrainedExaminerWrapper.tokenizer = tokenizer
                 _TrainedExaminerWrapper.config = config

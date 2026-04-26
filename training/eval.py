@@ -115,8 +115,10 @@ def run_eval(
     episode_results: list[dict] = []
 
     env = ExaminerEnv(kb=kb, config=None)
+    n_seeds = len(seeds)
 
-    for seed in seeds:
+    for ep_idx, seed in enumerate(seeds):
+        print(f"[eval] Episode {ep_idx + 1}/{n_seeds} (seed={seed})...", flush=True)
         obs, info = env.reset(seed=seed)
         done = False
         ep_turns = 0
@@ -126,10 +128,12 @@ def run_eval(
             examiner.reset()
 
         while not done:
+            ep_turns += 1
+            print(f"[eval]   turn {ep_turns} ...", flush=True)
             action_text = examiner.act(obs)
             obs, reward, terminated, truncated, step_info = env.step(action_text)
             done = terminated or truncated
-            ep_turns += 1
+        print(f"[eval]   done in {ep_turns} turns | reward={reward:.3f}", flush=True)
 
         # Collect RewardBreakdown from final step_info
         bd: RewardBreakdown | None = step_info.get("reward_breakdown")
