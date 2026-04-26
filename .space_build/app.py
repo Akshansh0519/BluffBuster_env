@@ -646,8 +646,9 @@ def create_app():
                 "|------|---------|-----|\n"
                 "| `limit` (eval seeds) | 15 | Matches FAST_CONFIG.eval_episodes; "
                 "subset of the full 50-seed suite (seed-matched). |\n"
-                "| `max_new_tokens` | 64 | Enough for one valid ASK/CLASSIFY "
-                "JSON; halves wall-clock vs 128. |\n"
+                "| `max_new_tokens` | 256 | A valid CLASSIFY JSON for 10 "
+                "sections is ~85 tokens; chat models often emit a short "
+                "preamble before it, so 256 gives safe headroom. |\n"
                 "| model | Qwen2.5-1.5B-Instruct | Same as `FAST_CONFIG`. |\n"
                 "| precision | 4-bit | Same as training. |\n\n"
                 "After the run completes, click **Refresh** in the "
@@ -659,7 +660,7 @@ def create_app():
                     label="Eval seeds (--limit)",
                 )
                 bl_tokens = gr.Slider(
-                    minimum=32, maximum=256, step=16, value=64,
+                    minimum=128, maximum=512, step=32, value=256,
                     label="max_new_tokens",
                 )
             bl_btn = gr.Button("Run Untrained Baseline", variant="primary",
