@@ -691,6 +691,7 @@ def _hub_restore_lora(
     can safely fall back to training from scratch.
     """
     import torch
+    import shutil
     try:
         from huggingface_hub import HfApi as _HfApi, hf_hub_download as _dl
         api = _HfApi(token=token)
@@ -705,24 +706,35 @@ def _hub_restore_lora(
             return None
 
         os.makedirs(local_dir, exist_ok=True)
+        prefix = folder_name.rstrip("/") + "/"
         for f in files:
             fname = getattr(f, "path", None) or getattr(f, "rfilename", None)
             if fname is None:
                 continue
-            # fname is like "lora-step-50/adapter_model.safetensors"
-            rel = fname[len(folder_name):].lstrip("/")
+            # Only restore files that actually live inside folder_name/.
+            # list_repo_tree can sometimes surface root-level siblings; ignore those.
+            if not fname.startswith(prefix):
+                continue
+            rel = fname[len(prefix):]
             if not rel:
                 continue
             dest = os.path.join(local_dir, rel)
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            _dl(
+            os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+
+            # hf_hub_download(filename="lora-step-N/adapter_model.safetensors",
+            # local_dir=X) writes to X/lora-step-N/adapter_model.safetensors —
+            # which would double-nest if X==local_dir. Use the cached path
+            # return value and copy explicitly to the flat target.
+            cached = _dl(
                 repo_id=repo_id,
                 repo_type="model",
                 filename=fname,
                 token=token,
-                local_dir=os.path.dirname(dest),
-                local_dir_use_symlinks=False,
             )
+            try:
+                shutil.copyfile(cached, dest)
+            except shutil.SameFileError:
+                pass
 
         # Load adapter weights into model
         adapter_bin   = os.path.join(local_dir, "adapter_model.bin")
@@ -1872,9 +1884,27 @@ def run_eval_only(config_name: str, eval_config: dict) -> dict:
     local_ckpt_dir = os.path.join("outputs", "checkpoints", latest_folder)
     ts = _hub_restore_lora(model, repo_id, hf_token, latest_folder, local_ckpt_dir)
     if ts is None:
-        raise RuntimeError(
-            f"Failed to restore LoRA weights from {latest_folder}. See logs above."
-        )
+        # Fallback: download the single critical file directly. Works even if
+        # list_repo_tree returns nothing (e.g. private-repo edge cases).
+        try:
+            from huggingface_hub import hf_hub_download as _dl
+            import shutil
+            os.makedirs(local_ckpt_dir, exist_ok=True)
+            cached = _dl(
+                repo_id=repo_id, repo_type="model", token=hf_token,
+                filename=f"{latest_folder}/adapter_model.safetensors",
+            )
+            shutil.copyfile(cached, os.path.join(local_ckpt_dir, "adapter_model.safetensors"))
+
+            from safetensors.torch import load_file as _load_sf
+            state_dict = _load_sf(os.path.join(local_ckpt_dir, "adapter_model.safetensors"))
+            from peft import set_peft_model_state_dict as _set_sd
+            _set_sd(model, state_dict)
+            print(f"[eval-only] Fallback adapter load succeeded from {latest_folder}")
+        except Exception as _e:
+            raise RuntimeError(
+                f"Failed to restore LoRA weights from {latest_folder} ({_e})."
+            )
     print(f"[eval-only] Restored LoRA weights from step {latest_step}.")
 
     # Switch to inference mode
