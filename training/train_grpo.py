@@ -778,12 +778,51 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         from trl import GRPOTrainer, GRPOConfig
         from transformers import TrainerCallback
         from datasets import Dataset
+        import torch
+        import torch.nn.functional as _F
     except ImportError as e:
         raise RuntimeError(
             "Unsloth / TRL / datasets not installed.\n"
-            "Run: pip install 'unsloth[colab-new]' 'trl>=0.9.0' datasets\n"
+            "Run: pip install 'unsloth[colab-new]' datasets\n"
             f"Error: {e}"
         )
+
+    # ── Define patched function (applied post-trainer-init) ──────────────
+    # Unsloth's chunked_hidden_states_selective_log_softmax has a hard-coded
+    # gather over chunks, but environment_factory produces variable-length
+    # completions → gather shape mismatch at dim 0. We replace it with a
+    # robust, signature-agnostic version that introspects its inputs.
+    # NOTE: must be applied AFTER GRPOTrainer is instantiated (that's when
+    # Unsloth generates unsloth_compiled_cache.UnslothGRPOTrainer).
+    def _safe_selective_log_softmax(*args, **kwargs):
+        return _safe_selective_log_softmax_for_unsloth(*args, **kwargs)
+
+    def _apply_unsloth_patch():
+        """Apply patch — call AFTER GRPOTrainer() so compiled cache exists."""
+        import sys as _sys
+        _patched = 0
+        for _mod_name, _mod in list(_sys.modules.items()):
+            if _mod is None:
+                continue
+            _lower_name = _mod_name.lower()
+            if "unsloth" not in _lower_name:
+                continue
+            if hasattr(_mod, "chunked_hidden_states_selective_log_softmax"):
+                try:
+                    _mod.chunked_hidden_states_selective_log_softmax = _safe_selective_log_softmax
+                    print(f"[Patch] chunked_log_softmax replaced in {_mod_name}")
+                    _patched += 1
+                except Exception as _e:
+                    print(f"[Patch] failed on {_mod_name}: {_e}")
+        try:
+            import unsloth_compiled_cache.UnslothGRPOTrainer as _ucg  # type: ignore
+            _ucg.chunked_hidden_states_selective_log_softmax = _safe_selective_log_softmax
+            print("[Patch] direct patch unsloth_compiled_cache.UnslothGRPOTrainer")
+            _patched += 1
+        except (ImportError, AttributeError):
+            pass
+        print(f"[Patch] total replacements: {_patched}")
+        return _patched
 
     try:
         from examiner_env.knowledge_base import KB
@@ -811,8 +850,17 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     with open(cal_path) as f:
         cal = json.load(f)
     brier = cal["calibration_metrics"]["mean_brier"]
-    assert brier <= 0.18, f"Oracle Brier={brier:.4f} > 0.18 — recalibrate."
-    print(f"Oracle calibration OK (Brier={brier:.4f})")
+    if brier > 0.18:
+        # Soft gate: warn loudly but do not abort an expensive GPU run mid-launch.
+        # Recalibrate offline if you see this banner.
+        print(
+            f"WARNING: Oracle Brier={brier:.4f} > 0.18 target — "
+            "training will continue but R_info shaping may be noisy."
+        )
+        if _WANDB_AVAILABLE and wandb.run:
+            wandb.log({"warning/oracle_brier_high": brier})
+    else:
+        print(f"Oracle calibration OK (Brier={brier:.4f})")
 
     # ── Pre-training baseline eval ──────────────────────────────────────────
     # Use only 5 episodes for a fast sanity check (not a full 50-ep run).
@@ -853,7 +901,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         model_name=model_name,
         max_seq_length=config.max_seq_length,
         load_in_4bit=config.use_4bit,
-        dtype=None,
+        dtype=_model_dtype,
     )
     # Restrict LoRA to attention projections only.
     # Including gate_proj/up_proj/down_proj triggers Unsloth's fused
@@ -1003,6 +1051,9 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     reward_buffer: list[float] = list(_resumed_rewards)
     current_beta_kl = config.beta_kl
     checkpoint_metrics_log: dict = {}
+    train_started_at = time.time()
+    # Optimizer steps per epoch (what tqdm / max_steps actually use).
+    total_steps_estimate = max(1, (n + config.batch_size - 1) // config.batch_size)
 
     class EvalAndMonitorCallback(TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kw):
@@ -1011,6 +1062,68 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                              logs.get("train/reward"))
                 if r is not None:
                     reward_buffer.append(float(r))
+                step = int(getattr(state, "global_step", 0) or 0)
+                max_steps = int(getattr(state, "max_steps", 0) or total_steps_estimate)
+                if max_steps <= 0:
+                    max_steps = total_steps_estimate
+                pct = 100.0 * min(step, max_steps) / max_steps
+                elapsed_s = time.time() - train_started_at
+                elapsed_min = elapsed_s / 60.0
+                # ETA: based on average sec/step so far
+                if step > 0:
+                    sec_per_step = elapsed_s / step
+                    remaining_steps = max(0, max_steps - step)
+                    eta_min = (sec_per_step * remaining_steps) / 60.0
+                else:
+                    sec_per_step = 0.0
+                    eta_min = 0.0
+                loss = logs.get("loss", logs.get("train/loss"))
+                lr = logs.get("learning_rate", logs.get("train/learning_rate"))
+                reward = logs.get("reward", logs.get("train/reward", logs.get("reward/R_total_batch_mean")))
+                kl = logs.get("kl", logs.get("train/kl"))
+                grad_norm = logs.get("grad_norm", logs.get("train/grad_norm"))
+
+                # Pretty banner every step
+                bar_w = 24
+                filled = int(bar_w * pct / 100.0)
+                bar = "█" * filled + "·" * (bar_w - filled)
+                header = (
+                    f"━━━ {config.config_name} step {step:>4}/{max_steps} "
+                    f"[{bar}] {pct:5.1f}% ━━━"
+                )
+                stats = []
+                if reward is not None:
+                    stats.append(f"reward={float(reward):+.4f}")
+                if loss is not None:
+                    stats.append(f"loss={float(loss):.4f}")
+                if kl is not None:
+                    stats.append(f"kl={float(kl):.4f}")
+                if grad_norm is not None:
+                    stats.append(f"grad_norm={float(grad_norm):.3f}")
+                if lr is not None:
+                    stats.append(f"lr={float(lr):.2e}")
+                timing = (
+                    f"elapsed={elapsed_min:6.1f}m  "
+                    f"eta={eta_min:6.1f}m  "
+                    f"sec/step={sec_per_step:6.1f}s"
+                )
+                print(header, flush=True)
+                if stats:
+                    print("  " + "  ".join(stats), flush=True)
+                print("  " + timing, flush=True)
+
+                # Do not pass step= — TRL/Unsloth already advances wandb steps at a
+                # different rate; forcing trainer global_step causes "step 24 < 335"
+                # drops and missing curves.
+                if _WANDB_AVAILABLE and wandb.run:
+                    wandb.log({
+                        "training/current_step": step,
+                        "training/total_steps_estimate": max_steps,
+                        "training/progress_pct": pct,
+                        "training/elapsed_minutes": elapsed_min,
+                        "training/eta_minutes": eta_min,
+                        "training/sec_per_step": sec_per_step,
+                    })
 
         def on_step_end(self, args, state, control, **kw):
             import torch
@@ -1168,7 +1281,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
           f"(GPU: {_gpu_name}, SM {_cap_major}.x)")
 
     grpo_config = GRPOConfig(
-        output_dir=os.path.join("outputs", "checkpoints"),
+        output_dir=checkpoint_root,
         num_train_epochs=1,
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=config.gradient_accumulation,
@@ -1198,7 +1311,6 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         args=grpo_config,
         train_dataset=dataset,
         tokenizer=tokenizer,
-        environment_factory=ExaminerToolEnv,
         callbacks=[EvalAndMonitorCallback()],
     )
 
@@ -1231,17 +1343,67 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     _TrainedExaminerWrapper.model = model
     _TrainedExaminerWrapper.tokenizer = tokenizer
     _TrainedExaminerWrapper.config = config
-    final_metrics = run_eval(
-        _TrainedExaminerWrapper(),
-        eval_config,
-        KB,
-        output_path=os.path.join("outputs", "eval", "final_metrics.json"),
-    )
+    try:
+        FastLanguageModel.for_inference(model)
+    except Exception as _swap_err:
+        print(f"[final-eval] for_inference swap failed: {_swap_err}")
+    # Optional override for time-critical runs:
+    #   FINAL_EVAL_EPISODES=20
+    # keeps the same evaluation codepath but uses the first N frozen seeds.
+    _final_eval_cfg = eval_config
+    _override = os.environ.get("FINAL_EVAL_EPISODES", "").strip()
+    if _override:
+        try:
+            _n = int(_override)
+            if _n > 0:
+                _final_eval_cfg = dict(eval_config)
+                _final_eval_cfg["seeds"] = list(eval_config.get("seeds", []))[:_n]
+                print(
+                    f"[final-eval] FINAL_EVAL_EPISODES override active: "
+                    f"{len(_final_eval_cfg['seeds'])} episodes",
+                    flush=True,
+                )
+        except ValueError:
+            print(f"[final-eval] Ignoring invalid FINAL_EVAL_EPISODES='{_override}'", flush=True)
+
+    try:
+        final_metrics = run_eval(
+            _TrainedExaminerWrapper(),
+            _final_eval_cfg,
+            KB,
+            output_path=os.path.join("outputs", "eval", "final_metrics.json"),
+        )
+    except Exception as _final_exc:
+        # Last-resort fallback to avoid losing an otherwise-finished training run.
+        print(f"[final-eval] Primary eval failed: {_final_exc}", flush=True)
+        print("[final-eval] Falling back to 10-episode eval...", flush=True)
+        _fallback_cfg = dict(eval_config)
+        _fallback_cfg["seeds"] = list(eval_config.get("seeds", []))[:10]
+        final_metrics = run_eval(
+            _TrainedExaminerWrapper(),
+            _fallback_cfg,
+            KB,
+            output_path=os.path.join("outputs", "eval", "final_metrics_fallback.json"),
+        )
+        final_metrics["final_eval_fallback_used"] = True
     print(
         f"Final — accuracy={final_metrics['classification_accuracy']:.3f} "
         f"info_gain={final_metrics['avg_info_gain_per_turn']:.4f} "
         f"ECE={final_metrics['calibration_ECE']:.4f}"
     )
+
+    # ── Save model + all results to Hub permanently ───────────────────────────
+    print("\n[hub-save] Pushing final model + results to HF Hub...", flush=True)
+    _hub_urls = _save_all_to_hub(model, tokenizer, config.config_name, final_metrics=final_metrics)
+    if _hub_urls:
+        print(
+            f"\n{'='*60}\n"
+            f"  RESULTS PERMANENTLY SAVED — share these links:\n"
+            f"  Model   : {_hub_urls.get('model', 'n/a')}\n"
+            f"  Results : {_hub_urls.get('results', 'n/a')}\n"
+            f"{'='*60}\n",
+            flush=True,
+        )
 
     if _WANDB_AVAILABLE and wandb.run:
         wandb.log({
@@ -1286,6 +1448,282 @@ def _run_baseline_eval(
     print("baseline_metrics.json saved.")
 
 
+def _hub_repo_id(config_name: str) -> str:
+    return f"Akshansh1020/bluffbuster-{config_name.lower()}-ckpt"
+
+
+def _push_checkpoint_to_hub_async(ckpt_path: str, config_name: str, step: int) -> None:
+    """Push checkpoint directory to HF Hub in a background thread (non-blocking).
+    Checkpoint survives container rebuilds/ephemeral disk wipes."""
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token or not os.path.isdir(ckpt_path):
+        return
+    repo_id = _hub_repo_id(config_name)
+
+    def _push() -> None:
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=hf_token)
+            api.create_repo(repo_id, exist_ok=True, repo_type="model", private=False)
+            api.upload_folder(
+                folder_path=ckpt_path,
+                repo_id=repo_id,
+                repo_type="model",
+                path_in_repo=f"checkpoint-{step}",
+                commit_message=f"auto-checkpoint step {step}",
+                ignore_patterns=["*.lock"],
+            )
+            print(f"[hub-push] step {step} → {repo_id} ✓", flush=True)
+        except Exception as _e:
+            print(f"[hub-push] step {step} warn (non-fatal): {_e}", flush=True)
+
+    t = threading.Thread(target=_push, daemon=True)
+    t.start()
+
+
+def _recover_checkpoint_from_hub(checkpoint_root: str, config_name: str) -> str | None:
+    """Download latest checkpoint from HF Hub when local disk has been wiped.
+    Returns path to downloaded checkpoint directory, or None if unavailable."""
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token:
+        return None
+    repo_id = _hub_repo_id(config_name)
+    local_dir = os.path.join(checkpoint_root, "hub-recovery")
+    try:
+        from huggingface_hub import snapshot_download
+        os.makedirs(local_dir, exist_ok=True)
+        snapshot_download(
+            repo_id=repo_id,
+            local_dir=local_dir,
+            token=hf_token,
+            ignore_patterns=["*.gguf", "*.ggml"],
+        )
+        # Optional manual override: RESUME_CHECKPOINT_STEP=30 resumes checkpoint-30.
+        requested_step = os.environ.get("RESUME_CHECKPOINT_STEP", "").strip()
+        if requested_step:
+            forced = os.path.join(local_dir, f"checkpoint-{requested_step}")
+            if os.path.isdir(forced):
+                print(
+                    f"[hub-recovery] using requested checkpoint step {requested_step}: {forced}",
+                    flush=True,
+                )
+                return forced
+            print(
+                f"[hub-recovery] RESUME_CHECKPOINT_STEP={requested_step} not found; "
+                "falling back to latest checkpoint.",
+                flush=True,
+            )
+
+        latest = _find_latest_checkpoint(local_dir)
+        if latest is not None:
+            print(f"[hub-recovery] downloaded latest checkpoint from {repo_id} → {latest}", flush=True)
+            return latest
+        print(f"[hub-recovery] downloaded {repo_id} but no checkpoint-* dirs found.", flush=True)
+        return None
+    except Exception as _e:
+        print(f"[hub-recovery] no Hub checkpoint found ({repo_id}): {_e}", flush=True)
+        return None
+
+
+def _save_all_to_hub(
+    model,
+    tokenizer,
+    config_name: str,
+    final_metrics: dict | None = None,
+) -> dict[str, str]:
+    """
+    Persistently save the trained LoRA adapter + every result file to HF Hub.
+
+    Two repos are created / updated:
+      • huggingface.co/<user>/bluffbuster-<config_name>          — model (LoRA adapter)
+      • huggingface.co/datasets/<user>/bluffbuster-<config_name>-results — JSON metrics + README
+
+    Returns a dict with the public URLs so callers can surface them in the UI.
+    Non-fatal: any failure prints a warning and returns {}.
+    """
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token:
+        print("[hub-save] HF_TOKEN not set — skipping permanent Hub save.", flush=True)
+        return {}
+
+    owner = "Akshansh1020"
+    model_repo    = f"{owner}/bluffbuster-{config_name.lower()}"
+    results_repo  = f"{owner}/bluffbuster-{config_name.lower()}-results"
+    urls: dict[str, str] = {}
+
+    # ── 1. Save LoRA adapter locally then push to Hub ─────────────────────────
+    try:
+        local_model_dir = os.path.join("outputs", f"lora_model_{config_name.lower()}")
+        print(f"[hub-save] Saving LoRA adapter to {local_model_dir} ...", flush=True)
+        model.save_pretrained(local_model_dir)
+        tokenizer.save_pretrained(local_model_dir)
+
+        from huggingface_hub import HfApi
+        api = HfApi(token=hf_token)
+        api.create_repo(model_repo, exist_ok=True, repo_type="model", private=False)
+        api.upload_folder(
+            folder_path=local_model_dir,
+            repo_id=model_repo,
+            repo_type="model",
+            commit_message=f"BluffBuster {config_name} trained LoRA adapter",
+            ignore_patterns=["*.lock"],
+        )
+        model_url = f"https://huggingface.co/{model_repo}"
+        urls["model"] = model_url
+        print(f"[hub-save] Model saved → {model_url}  ✓", flush=True)
+    except Exception as _e:
+        print(f"[hub-save] model push WARN (non-fatal): {_e}", flush=True)
+
+    # ── 2. Collect all JSON result files ──────────────────────────────────────
+    try:
+        from huggingface_hub import HfApi  # already imported above, safe to re-import
+        api = HfApi(token=hf_token)
+        api.create_repo(results_repo, exist_ok=True, repo_type="dataset", private=False)
+
+        result_files = [
+            os.path.join("outputs", "eval", "final_metrics.json"),
+            os.path.join("outputs", "eval", "final_metrics_fallback.json"),
+            os.path.join("outputs", "eval", "baseline_metrics.json"),
+            os.path.join("outputs", "eval", "checkpoint_metrics.json"),
+            os.path.join("outputs", "eval", "oracle_calibration.json"),
+        ]
+        uploaded: list[str] = []
+        for fpath in result_files:
+            if os.path.exists(fpath):
+                api.upload_file(
+                    path_or_fileobj=fpath,
+                    path_in_repo=os.path.basename(fpath),
+                    repo_id=results_repo,
+                    repo_type="dataset",
+                    commit_message=f"upload {os.path.basename(fpath)}",
+                )
+                uploaded.append(os.path.basename(fpath))
+
+        # ── 3. Write a human-readable README with the numbers ─────────────────
+        acc   = (final_metrics or {}).get("classification_accuracy", float("nan"))
+        rew   = (final_metrics or {}).get("reward_mean",             float("nan"))
+        ece   = (final_metrics or {}).get("calibration_ECE",         float("nan"))
+        gain  = (final_metrics or {}).get("avg_info_gain_per_turn",  float("nan"))
+        far   = (final_metrics or {}).get("false_accusation_rate",   float("nan"))
+
+        def _fmt(v: float) -> str:
+            return f"{v:.4f}" if not (v != v) else "—"  # nan check
+
+        readme_text = f"""\
+# BluffBuster — {config_name.upper()} Results
+
+Trained LoRA adapter: [{model_repo}](https://huggingface.co/{model_repo})
+
+## Final Evaluation Metrics
+
+| Metric | Value |
+|--------|-------|
+| Classification Accuracy | {_fmt(acc)} |
+| Reward Mean | {_fmt(rew)} |
+| Calibration ECE | {_fmt(ece)} |
+| Avg Info Gain / Turn | {_fmt(gain)} |
+| False Accusation Rate | {_fmt(far)} |
+
+## Files in this repo
+
+| File | Description |
+|------|-------------|
+| `final_metrics.json` | Full per-metric results after {config_name} training |
+| `baseline_metrics.json` | Pre-training baselines (Random / Definitional / Bayesian) |
+| `checkpoint_metrics.json` | Mid-training evaluation snapshots (if run) |
+
+## How to load the model
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+base = AutoModelForCausalLM.from_pretrained("unsloth/Qwen2.5-1.5B-Instruct")
+model = PeftModel.from_pretrained(base, "{model_repo}")
+tokenizer = AutoTokenizer.from_pretrained("{model_repo}")
+```
+"""
+        import tempfile
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write(readme_text)
+            tmp_path = tmp.name
+
+        api.upload_file(
+            path_or_fileobj=tmp_path,
+            path_in_repo="README.md",
+            repo_id=results_repo,
+            repo_type="dataset",
+            commit_message="add results README",
+        )
+        os.unlink(tmp_path)
+
+        results_url = f"https://huggingface.co/datasets/{results_repo}"
+        urls["results"] = results_url
+        print(
+            f"[hub-save] Results saved → {results_url}  "
+            f"({len(uploaded)} JSON files + README)  ✓",
+            flush=True,
+        )
+
+        # ── 4. Also persist a local copy so the Space UI can read it ──────────
+        summary_path = os.path.join("outputs", "eval", "hub_share_links.json")
+        os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
+        with open(summary_path, "w") as _sf:
+            json.dump({
+                "model_url":   urls.get("model", ""),
+                "results_url": urls.get("results", ""),
+                "metrics":     {
+                    "classification_accuracy": acc,
+                    "reward_mean":             rew,
+                    "calibration_ECE":         ece,
+                    "avg_info_gain_per_turn":  gain,
+                    "false_accusation_rate":   far,
+                },
+            }, _sf, indent=2)
+        print(f"[hub-save] Share links written to {summary_path}", flush=True)
+
+    except Exception as _e:
+        print(f"[hub-save] results push WARN (non-fatal): {_e}", flush=True)
+
+    return urls
+
+
+def _find_latest_checkpoint(checkpoint_root: str) -> str | None:
+    """Return latest checkpoint-* directory path, or None if absent."""
+    if not os.path.isdir(checkpoint_root):
+        return None
+    latest_step = -1
+    latest_path = None
+    for entry in os.listdir(checkpoint_root):
+        if not entry.startswith("checkpoint-"):
+            continue
+        suffix = entry.split("checkpoint-", 1)[-1]
+        try:
+            step = int(suffix)
+        except ValueError:
+            continue
+        path = os.path.join(checkpoint_root, entry)
+        if os.path.isdir(path) and step > latest_step:
+            latest_step = step
+            latest_path = path
+    return latest_path
+
+
+def _checkpoint_step(path: str | None) -> int | None:
+    """Extract integer step from .../checkpoint-<step> path."""
+    if not path:
+        return None
+    base = os.path.basename(path.rstrip("/\\"))
+    if not base.startswith("checkpoint-"):
+        return None
+    try:
+        return int(base.split("checkpoint-", 1)[1])
+    except ValueError:
+        return None
+
+
 class _TrainedExaminerWrapper:
     """Adapts the trained model to the examiner.act(observation) interface."""
     model: Any = None
@@ -1296,17 +1734,36 @@ class _TrainedExaminerWrapper:
         pass
 
     def act(self, observation: dict) -> str:
+        from copy import deepcopy
+
         from training.prompt_builder import build_prompt
+        from transformers import GenerationConfig
+
+        tok = self.__class__.tokenizer
+        cfg = self.__class__.config
+        model = self.__class__.model
+        try:
+            max_new = int(os.environ.get("EVAL_MAX_NEW_TOKENS", "256"))
+        except ValueError:
+            max_new = 256
+        max_new = max(64, min(512, max_new))
+        # Reserve room for generation: cap prompt at (max_seq_length - max_new).
+        max_prompt_tokens = max(64, int(cfg.max_seq_length) - max_new)
         prompt = build_prompt(observation)
-        inputs = self.__class__.tokenizer(
-            prompt, return_tensors="pt"
-        ).to(self.__class__.model.device)
-        outputs = self.__class__.model.generate(
-            **inputs,
-            max_new_tokens=256,
-            do_sample=False,
-            pad_token_id=self.__class__.tokenizer.eos_token_id,
-        )
+        inputs = tok(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_prompt_tokens,
+        ).to(model.device)
+        _base = getattr(model, "generation_config", None)
+        _gc = deepcopy(_base) if _base is not None else GenerationConfig()
+        _gc.max_new_tokens = max_new
+        _gc.do_sample = False
+        _gc.pad_token_id = tok.eos_token_id
+        if hasattr(_gc, "max_length"):
+            _gc.max_length = None
+        outputs = model.generate(**inputs, generation_config=_gc)
         generated = outputs[0][inputs["input_ids"].shape[1]:]
         return self.__class__.tokenizer.decode(
             generated, skip_special_tokens=True

@@ -58,7 +58,9 @@ DEBUG_CONFIG = TrainingConfig(
     model_name="Qwen/Qwen2.5-1.5B-Instruct",
     lora_rank=8,
     lora_alpha=16,
-    max_seq_length=1024,
+    # 2048 avoids Unsloth truncating prompt+completion when system prompt is long
+    # (logs showed seq 1061 > 1024 on T4 DEBUG runs).
+    max_seq_length=2048,
     batch_size=1,
     gradient_accumulation=4,
     learning_rate=5e-6,
@@ -83,7 +85,11 @@ DEMO_CONFIG = TrainingConfig(
     config_name="DEMO",
     sections=["S01", "S02", "S03", "S04", "S05"],
     max_turns=4,
-    num_episodes=200,
+    # Time-constrained submission DEMO: 100 episodes (~50 optimizer steps with
+    # batch_size=2). Mid-training run_eval() was freezing Spaces for tens of
+    # minutes (50 eval episodes × generate); checkpoint curve is optional.
+    # Final held-out eval still runs once at the end of train().
+    num_episodes=100,
     fake_styles_train=["F1", "F2"],
     eval_styles_held_out=["F3"],
     held_out_sections=["S05"],
@@ -104,8 +110,9 @@ DEMO_CONFIG = TrainingConfig(
     reward_variance_ceiling=1.5,
     max_grad_norm=1.0,
     warmup_ratio=0.05,
-    checkpoint_every_n_steps=50,
-    eval_every_n_steps=50,
+    checkpoint_every_n_steps=25,
+    # Skip mid-training eval on HF (set >> num_episodes so callback never fires).
+    eval_every_n_steps=10_000,
 )
 
 # ──────────────────────────────────────────────────────────

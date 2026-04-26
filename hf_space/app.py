@@ -17,11 +17,19 @@ Tabs:
 
 from __future__ import annotations
 
+# Set before torch/unsloth load so @torch.compile becomes a no-op globally.
+# Prevents Unsloth compiled GRPOTrainer shape-trace errors with environment_factory.
+import os as _env_os
+_env_os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+
 import json
 import os
 import sys
 
 import gradio as gr
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 
 # ── Narrative (verbatim from PROJECT IDENTITY) ──
@@ -145,22 +153,45 @@ def _get_env_and_baselines():
 # Tab 1: Live Episode
 # ──────────────────────────────────────────────────────────
 
+def _make_posterior_figure(posterior_trace: list) -> plt.Figure:
+    """Build a matplotlib figure from posterior_trace list[dict[section_id, float]]."""
+    fig, ax = plt.subplots(figsize=(9, 4))
+    if not posterior_trace:
+        ax.text(0.5, 0.5, "No posterior trace available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+
+    sections = list(posterior_trace[0].keys())
+    turns = list(range(1, len(posterior_trace) + 1))
+    for s_id in sections:
+        vals = [step.get(s_id, 0.5) for step in posterior_trace]
+        ax.plot(turns, vals, marker="o", linewidth=1.8, label=s_id)
+
+    ax.axhline(0.5, color="gray", linestyle="--", linewidth=0.8, label="Prior (0.5)")
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Turn")
+    ax.set_ylabel("p_t(s) — P(KNOWS)")
+    ax.set_title("Per-Section Posterior Belief Trace")
+    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=7)
+    fig.tight_layout()
+    return fig
+
+
 def run_live_episode(seed: int, examiner_name: str):
     env, kb, baselines, trained = _get_env_and_baselines()
+
+    _empty_fig = _make_posterior_figure([])
+
     if env is None:
-        return (
-            "Environment not available — ensure examiner_env is installed.",
-            [], [], {}, "N/A"
-        )
+        return [], _empty_fig, {}, "Environment not available."
 
     examiner = baselines.get(examiner_name) or trained
     if examiner is None:
-        return "Selected examiner not available.", [], [], {}, "N/A"
+        return [], _empty_fig, {}, f"Examiner '{examiner_name}' not available."
 
     obs, _ = env.reset(seed=int(seed))
     done = False
     dialogue_rows = []
-    posterior_data = []
     step = 0
 
     if hasattr(examiner, "reset"):
@@ -180,17 +211,12 @@ def run_live_episode(seed: int, examiner_name: str):
                 last.get("question", ""),
                 last.get("response", ""),
             ])
-
         step += 1
 
     bd = info.get("reward_breakdown")
     true_labels = info.get("true_labels", {})
 
-    # Posterior trace for chart
-    if bd and bd.posterior_trace:
-        for t_idx, pt in enumerate(bd.posterior_trace):
-            for s_id, p in pt.items():
-                posterior_data.append({"Turn": t_idx + 1, "Section": s_id, "Posterior": p})
+    posterior_fig = _make_posterior_figure(bd.posterior_trace if bd and bd.posterior_trace else [])
 
     reward_display = {}
     if bd:
@@ -209,11 +235,11 @@ def run_live_episode(seed: int, examiner_name: str):
             "R_total": round(bd.R_total, 4),
         }
 
-    ground_truth_md = "## Ground Truth (revealed)\n" + "\n".join(
+    ground_truth_md = "### Ground Truth (revealed after classify)\n" + "\n".join(
         f"- **{s}**: {label}" for s, label in sorted(true_labels.items())
     )
 
-    return dialogue_rows, posterior_data, reward_display, ground_truth_md
+    return dialogue_rows, posterior_fig, reward_display, ground_truth_md
 
 
 # ──────────────────────────────────────────────────────────
@@ -267,7 +293,7 @@ def run_comparison(seed: int):
 # ──────────────────────────────────────────────────────────
 
 def create_app():
-    with gr.Blocks(title="The Examiner — BluffBuster", theme=gr.themes.Soft()) as app:
+    with gr.Blocks(title="The Examiner — BluffBuster") as app:
 
         gr.Markdown(f"# 🧐 The Examiner — BluffBuster\n\n> {THREE_SENTENCE_NARRATIVE}")
 
@@ -292,13 +318,7 @@ def create_app():
                 label="Dialogue",
                 wrap=True,
             )
-            posterior_plot = gr.LinePlot(
-                x="Turn",
-                y="Posterior",
-                color="Section",
-                title="Per-Section Belief p_t(s) — 0.5=uncertain, 1.0=confident KNOWS",
-                y_lim=[0, 1],
-            )
+            posterior_plot = gr.Plot(label="Per-Section Belief p_t(s) — 0.5=uncertain, 1.0=confident KNOWS")
             info_gain_display = gr.JSON(label="Reward Breakdown")
             ground_truth_display = gr.Markdown(label="Ground Truth (revealed after classify)")
 
@@ -337,24 +357,16 @@ def create_app():
                 "Not mocked. Not placeholders. (MSR-3)**"
             )
 
-            def _img(filename: str, label: str):
-                path = os.path.join(PLOT_DIR, filename)
-                if os.path.exists(path):
-                    return gr.Image(value=path, label=label, show_download_button=True)
-                return gr.Markdown(f"*{label}: not yet generated — run training first.*")
-
             with gr.Row():
                 gr.Image(
                     value=os.path.join(PLOT_DIR, "reward_curve.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "reward_curve.png")) else None,
                     label="R_total over Training",
-                    show_download_button=True,
                 )
                 gr.Image(
                     value=os.path.join(PLOT_DIR, "accuracy_curve.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "accuracy_curve.png")) else None,
                     label="Accuracy over Training",
-                    show_download_button=True,
                 )
 
             with gr.Row():
@@ -362,13 +374,11 @@ def create_app():
                     value=os.path.join(PLOT_DIR, "comparison_bar.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "comparison_bar.png")) else None,
                     label="4-Examiner Comparison (Held-Out Eval)",
-                    show_download_button=True,
                 )
                 gr.Image(
                     value=os.path.join(PLOT_DIR, "per_style_heatmap.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "per_style_heatmap.png")) else None,
                     label="Per-Style Accuracy Heatmap",
-                    show_download_button=True,
                 )
 
             with gr.Row():
@@ -376,29 +386,213 @@ def create_app():
                     value=os.path.join(PLOT_DIR, "info_gain_curve.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "info_gain_curve.png")) else None,
                     label="avg Info Gain/Turn over Training",
-                    show_download_button=True,
                 )
                 gr.Image(
                     value=os.path.join(PLOT_DIR, "calibration_ece_curve.png")
                     if os.path.exists(os.path.join(PLOT_DIR, "calibration_ece_curve.png")) else None,
                     label="Calibration ECE over Training",
-                    show_download_button=True,
                 )
 
             gr.Image(
                 value=os.path.join(PLOT_DIR, "posterior_trace_example.png")
                 if os.path.exists(os.path.join(PLOT_DIR, "posterior_trace_example.png")) else None,
                 label="Posterior Trace Example — Best AFTER Transcript",
-                show_download_button=True,
             )
 
         # ── Tab 4: Environment Details ──
         with gr.Tab("🔬 Environment Details"):
             gr.Markdown(ENV_DETAILS_MARKDOWN)
 
+        # ── Tab 5: Training Launcher ──
+        with gr.Tab("🏋️ Train (GPU)"):
+            gr.Markdown(
+                "## GRPO Training Launcher\n"
+                "Runs training on this Space's GPU using HF credits.\n\n"
+                "- **DEBUG** — 20 episodes, Qwen2.5-1.5B, quick smoke test.\n"
+                "- **DEMO** — 100 episodes, Qwen2.5-7B, submission gate / evidence run.\n"
+                "- **FULL** — 500 episodes, all 10 sections, main training run "
+                "(optimizer steps ≈ `500 / batch_size` → **~250 steps** with `batch_size=2`). "
+                "Use a strong GPU (A100) and expect many hours.\n"
+                "- **Safety** — checkpoints are saved every 10 steps and relaunch "
+                "auto-resumes from the latest `outputs/checkpoints/checkpoint-*`.\n"
+                "- To force a fresh run, delete `outputs/checkpoints/` first.\n\n"
+                "> Credentials are read from Space secrets (already set). "
+                "Pick a config and click Launch."
+            )
+            train_config_choice = gr.Radio(
+                choices=["DEBUG", "DEMO", "FULL"],
+                value="DEBUG",
+                label="Training preset",
+                elem_id="train_config_preset",
+            )
+            train_btn = gr.Button("🚀 Launch Training", variant="primary", size="lg")
+            eval_only_btn = gr.Button(
+                "⚡ Eval Only (load saved model from Hub — no training)",
+                variant="secondary",
+                size="lg",
+            )
+            train_output = gr.Textbox(
+                label="Training / Eval Log",
+                lines=20,
+                interactive=False,
+                placeholder="Output will appear here...",
+            )
+
+            def run_training_on_space(config_name: str) -> str:
+                import traceback
+                wandb_key = os.environ.get("WANDB_API_KEY", "")
+                hf_token = os.environ.get("HF_TOKEN", "")
+                if not wandb_key:
+                    return "ERROR: WANDB_API_KEY secret not set in this Space."
+                if not hf_token:
+                    return "ERROR: HF_TOKEN secret not set in this Space."
+                try:
+                    import json
+                    from training.config import get_config
+                    from training.train_grpo import train
+                    from examiner_env.calibration import run_calibration
+                    from examiner_env.knowledge_base import KB
+
+                    os.environ["WANDB_API_KEY"] = wandb_key
+                    os.environ["HF_TOKEN"] = hf_token
+                    # Keep final eval reliable but bounded for hackathon time budget.
+                    # Train code still supports full 50-episode final eval when unset.
+                    if config_name == "DEMO":
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "10")
+                    elif config_name == "FULL":
+                        # Keep FULL bounded for deadline-safe runs on Spaces.
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "30")
+
+                    for d in ["outputs/eval", "outputs/plots", "outputs/transcripts", "outputs/checkpoints"]:
+                        os.makedirs(d, exist_ok=True)
+
+                    cal_path = "outputs/eval/oracle_calibration.json"
+                    if not os.path.exists(cal_path):
+                        run_calibration(KB, n_episodes=200, output_path=cal_path)
+
+                    with open(cal_path) as f:
+                        cal = json.load(f)
+                    brier = cal["calibration_metrics"]["mean_brier"]
+                    if brier > 0.18:
+                        return f"ERROR: Oracle Brier={brier:.4f} > 0.18. Recalibrate."
+
+                    with open("eval_config.json") as f:
+                        eval_config = json.load(f)
+
+                    config = get_config(config_name)
+                    final_metrics = train(config, eval_config)
+
+                    acc = final_metrics.get("classification_accuracy", float("nan"))
+                    gain = final_metrics.get("avg_info_gain_per_turn", float("nan"))
+                    ece = final_metrics.get("calibration_ECE", float("nan"))
+                    r_mean = final_metrics.get("reward_mean", float("nan"))
+                    far   = final_metrics.get("false_accusation_rate", float("nan"))
+
+                    # Read Hub share links written by _save_all_to_hub
+                    links_path = os.path.join("outputs", "eval", "hub_share_links.json")
+                    model_url   = ""
+                    results_url = ""
+                    if os.path.exists(links_path):
+                        try:
+                            with open(links_path) as _lf:
+                                _links = json.load(_lf)
+                            model_url   = _links.get("model_url", "")
+                            results_url = _links.get("results_url", "")
+                        except Exception:
+                            pass
+
+                    share_block = (
+                        f"\n{'='*55}\n"
+                        f"  PERMANENT SHARE LINKS (survive rebuilds):\n"
+                        f"  🤗 Model   : {model_url or 'see Space logs'}\n"
+                        f"  📊 Results : {results_url or 'see Space logs'}\n"
+                        f"{'='*55}\n"
+                    ) if (model_url or results_url) else (
+                        "\n  (Hub save running in background — check Space logs for links)\n"
+                    )
+
+                    return (
+                        f"✅ Training complete ({config_name})\n"
+                        f"  Classification accuracy (held-out): {acc:.3f}\n"
+                        f"  Avg info gain / turn:               {gain:.4f}\n"
+                        f"  Calibration ECE:                    {ece:.4f}\n"
+                        f"  Mean R_total:                       {r_mean:.4f}\n"
+                        f"  False accusation rate:              {far:.4f}\n"
+                        f"{share_block}"
+                        f"W&B: https://wandb.ai (project: bluffbuster-examiner)\n"
+                        f"All JSON metrics → outputs/eval/"
+                    )
+                except Exception:
+                    return f"ERROR:\n{traceback.format_exc()}"
+
+            def run_eval_only_on_space(config_name: str) -> str:
+                """Load saved LoRA from Hub and run eval — zero training steps."""
+                import traceback
+                hf_token = os.environ.get("HF_TOKEN", "")
+                if not hf_token:
+                    return "ERROR: HF_TOKEN secret not set in this Space."
+                try:
+                    from training.config import get_config
+                    from training.train_grpo import run_eval_only
+
+                    os.environ["HF_TOKEN"] = hf_token
+                    # Cap eval at 10 episodes for speed (~20 min on A100)
+                    os.environ["FINAL_EVAL_EPISODES"] = "10"
+
+                    for d in ["outputs/eval", "outputs/plots"]:
+                        os.makedirs(d, exist_ok=True)
+
+                    with open("eval_config.json") as f:
+                        eval_config = json.load(f)
+
+                    print(f"[app] Starting eval-only for {config_name}...", flush=True)
+                    final_metrics = run_eval_only(config_name, eval_config)
+
+                    acc   = final_metrics.get("classification_accuracy", float("nan"))
+                    gain  = final_metrics.get("avg_info_gain_per_turn", float("nan"))
+                    ece   = final_metrics.get("calibration_ECE", float("nan"))
+                    r_mean = final_metrics.get("reward_mean", float("nan"))
+                    far   = final_metrics.get("false_accusation_rate", float("nan"))
+
+                    links_path = os.path.join("outputs", "eval", "hub_share_links.json")
+                    results_url = ""
+                    if os.path.exists(links_path):
+                        try:
+                            with open(links_path) as _lf:
+                                _links = json.load(_lf)
+                            results_url = _links.get("results_url", "")
+                        except Exception:
+                            pass
+
+                    return (
+                        f"✅ Eval-only complete ({config_name}) — NO retraining\n"
+                        f"  Classification accuracy : {acc:.3f}\n"
+                        f"  Avg info gain / turn   : {gain:.4f}\n"
+                        f"  Calibration ECE        : {ece:.4f}\n"
+                        f"  Mean R_total           : {r_mean:.4f}\n"
+                        f"  False accusation rate  : {far:.4f}\n\n"
+                        f"{'='*55}\n"
+                        f"  Results + plot → {results_url or 'outputs/eval/'}\n"
+                        f"{'='*55}"
+                    )
+                except Exception:
+                    return f"ERROR (eval-only):\n{traceback.format_exc()}"
+
+            train_btn.click(
+                fn=run_training_on_space,
+                inputs=[train_config_choice],
+                outputs=[train_output],
+            )
+
+            eval_only_btn.click(
+                fn=run_eval_only_on_space,
+                inputs=[train_config_choice],
+                outputs=[train_output],
+            )
+
     return app
 
 
 if __name__ == "__main__":
     app = create_app()
-    app.launch()
+    app.launch(theme=gr.themes.Soft())
