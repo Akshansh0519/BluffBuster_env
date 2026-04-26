@@ -55,9 +55,42 @@ import json
 import os
 import re
 import sys
+import warnings
 from typing import Any, Iterable
 
 import numpy as np
+
+# ── Silence known-harmless warnings that pollute the live log ──────────────
+# 1. "Both max_new_tokens and max_length seem to have been set" — we pass
+#    max_new_tokens explicitly; max_length comes from the model's generation_config
+#    and is irrelevant. max_new_tokens wins; message adds no info.
+# 2. "Passing generation_config together with generation-related arguments" —
+#    Unsloth/TRL internal; not our call-site; will be fixed upstream.
+# 3. AttentionMaskConverter FutureWarning — transformers v5 API change; not
+#    actionable until we upgrade transformers.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*max_new_tokens.*max_length.*seem to have been set.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Passing `generation_config`.*generation-related arguments.*deprecated.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*AttentionMaskConverter.*deprecated.*",
+    category=FutureWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*attention mask API.*deprecated.*",
+    category=FutureWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*use_return_dict.*deprecated.*",
+)
+# ──────────────────────────────────────────────────────────────────────────
 
 from training.config import TrainingConfig, get_config, DEBUG_CONFIG
 
@@ -770,8 +803,10 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 )
 
             # ── Lightweight LoRA adapter save ──────────────────────────────
-            # Saves only the LoRA adapter weights (~50 MB) every few steps.
-            # Much cheaper than a full Trainer checkpoint; survives crashes.
+            # Saves LoRA adapter weights (~50 MB) every few steps.
+            # Also uploads to HF Hub so checkpoints SURVIVE Space restarts
+            # (HF Spaces filesystem is ephemeral — local saves alone are lost
+            # if the container restarts after a connection error).
             if step % _lora_save_every == 0:
                 lora_dir = os.path.join(
                     "outputs", "checkpoints", f"lora-step-{step}"
@@ -782,6 +817,37 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                     print(f"[ckpt] LoRA adapter saved → {lora_dir}")
                 except Exception as _e:
                     print(f"[ckpt] WARNING: LoRA save failed at step {step}: {_e}")
+
+                # Upload to HF Hub so the checkpoint survives a Space restart.
+                # Uses HF_TOKEN env var (set as a Space secret).
+                _hf_token = os.environ.get("HF_TOKEN")
+                _repo_id  = os.environ.get(
+                    "CHECKPOINT_REPO",
+                    "Samarth1401/bluffbuster-checkpoints",
+                )
+                if _hf_token and os.path.isdir(lora_dir):
+                    try:
+                        from huggingface_hub import HfApi as _HfApi
+                        _api = _HfApi(token=_hf_token)
+                        _api.create_repo(
+                            repo_id=_repo_id,
+                            repo_type="model",
+                            exist_ok=True,
+                            private=True,
+                        )
+                        _api.upload_folder(
+                            folder_path=lora_dir,
+                            repo_id=_repo_id,
+                            repo_type="model",
+                            path_in_repo=f"lora-step-{step}",
+                            commit_message=f"LoRA checkpoint step {step} "
+                                           f"({config.config_name})",
+                        )
+                        print(f"[ckpt] LoRA adapter uploaded → "
+                              f"hf.co/{_repo_id}/lora-step-{step}")
+                    except Exception as _hub_e:
+                        print(f"[ckpt] WARNING: HF Hub upload failed at step "
+                              f"{step}: {_hub_e}")
 
             # ── Checkpoint eval ────────────────────────────────────────────
             # CRITICAL: switch model to eval mode + no_grad before inference.
