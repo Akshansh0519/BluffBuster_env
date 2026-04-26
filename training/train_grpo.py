@@ -625,6 +625,115 @@ def _check_reward_variance(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#   HF Hub checkpoint helpers  (cross-restart resume)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _hub_get_latest_step(repo_id: str, token: str) -> tuple[int, str | None]:
+    """
+    Scan ``repo_id`` (model repo) for folders named ``lora-step-<N>``.
+    Returns ``(latest_step, folder_name)`` or ``(0, None)`` if none found or
+    if the repo doesn't exist yet.
+    """
+    try:
+        from huggingface_hub import HfApi as _HfApi
+        api = _HfApi(token=token)
+        files = api.list_repo_tree(
+            repo_id=repo_id, repo_type="model", recursive=False
+        )
+        steps = []
+        for f in files:
+            name = getattr(f, "path", "") or getattr(f, "rfilename", "")
+            if name.startswith("lora-step-"):
+                try:
+                    steps.append(int(name.split("-")[-1]))
+                except ValueError:
+                    pass
+        if not steps:
+            return 0, None
+        best = max(steps)
+        return best, f"lora-step-{best}"
+    except Exception:
+        return 0, None
+
+
+def _hub_restore_lora(
+    model,
+    repo_id: str,
+    token: str,
+    folder_name: str,
+    local_dir: str,
+) -> dict | None:
+    """
+    Download ``folder_name`` from ``repo_id`` to ``local_dir``, load the LoRA
+    adapter weights into ``model``, and return the parsed ``training_state.json``
+    (or ``None`` if it doesn't exist / fails).
+
+    Returns the training_state dict on success so the caller can resume dataset
+    position and reward_buffer.  Returns ``None`` on any failure so the caller
+    can safely fall back to training from scratch.
+    """
+    import torch
+    try:
+        from huggingface_hub import HfApi as _HfApi, hf_hub_download as _dl
+        api = _HfApi(token=token)
+
+        # List files inside the folder on the Hub
+        files = list(api.list_repo_tree(
+            repo_id=repo_id, repo_type="model",
+            path_in_repo=folder_name, recursive=True,
+        ))
+        if not files:
+            print(f"[resume] WARNING: {folder_name} exists but is empty on Hub")
+            return None
+
+        os.makedirs(local_dir, exist_ok=True)
+        for f in files:
+            fname = getattr(f, "path", None) or getattr(f, "rfilename", None)
+            if fname is None:
+                continue
+            # fname is like "lora-step-50/adapter_model.safetensors"
+            rel = fname[len(folder_name):].lstrip("/")
+            if not rel:
+                continue
+            dest = os.path.join(local_dir, rel)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            _dl(
+                repo_id=repo_id,
+                repo_type="model",
+                filename=fname,
+                token=token,
+                local_dir=os.path.dirname(dest),
+                local_dir_use_symlinks=False,
+            )
+
+        # Load adapter weights into model
+        adapter_bin   = os.path.join(local_dir, "adapter_model.bin")
+        adapter_safe  = os.path.join(local_dir, "adapter_model.safetensors")
+        if os.path.exists(adapter_safe):
+            from safetensors.torch import load_file as _load_sf
+            state_dict = _load_sf(adapter_safe)
+        elif os.path.exists(adapter_bin):
+            state_dict = torch.load(adapter_bin, map_location="cpu")
+        else:
+            print(f"[resume] WARNING: no adapter_model file found in {local_dir}")
+            return None
+
+        from peft import set_peft_model_state_dict as _set_sd
+        _set_sd(model, state_dict)
+        print(f"[resume] LoRA weights loaded from {folder_name}")
+
+        # Read training state
+        ts_path = os.path.join(local_dir, "training_state.json")
+        if os.path.exists(ts_path):
+            with open(ts_path) as _f:
+                return json.load(_f)
+        return {}
+    except Exception as _e:
+        print(f"[resume] WARNING: restore failed ({_e}), training from scratch")
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #   Main training entry point
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -747,6 +856,50 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     _install_unsloth_chunked_logsoftmax_patch()
     _install_addmm_dtype_patch()
 
+    # ── Cross-restart resume from HF Hub ────────────────────────────────────
+    # HF Spaces filesystem is ephemeral — local checkpoints are wiped on every
+    # container restart. On startup we scan the Hub checkpoint repo for the
+    # latest lora-step-N, download it, restore the adapter weights, and slice
+    # the dataset so we skip already-trained episodes.
+    # If no checkpoint exists (first run) this is a no-op.
+    _resume_step      = 0
+    _start_episode    = 0
+    _resumed_rewards: list[float] = []
+
+    _hf_token_startup = os.environ.get("HF_TOKEN")
+    _repo_id_startup  = os.environ.get(
+        "CHECKPOINT_REPO", "Samarth1401/bluffbuster-checkpoints"
+    )
+    if _hf_token_startup:
+        print(f"[resume] Scanning HF Hub for checkpoints in {_repo_id_startup}...")
+        _latest_step, _latest_folder = _hub_get_latest_step(
+            _repo_id_startup, _hf_token_startup
+        )
+        if _latest_step > 0:
+            print(f"[resume] Found checkpoint at step {_latest_step}, restoring...")
+            _lora_local = os.path.join(
+                "outputs", "checkpoints", f"lora-step-{_latest_step}"
+            )
+            _ts = _hub_restore_lora(
+                model,
+                _repo_id_startup,
+                _hf_token_startup,
+                _latest_folder,
+                _lora_local,
+            )
+            if _ts is not None:
+                _resume_step   = _ts.get("step", _latest_step)
+                _start_episode = _ts.get("episodes_consumed", _resume_step * config.batch_size)
+                _resumed_rewards = _ts.get("reward_buffer", [])
+                print(f"[resume] Resumed from step {_resume_step}, "
+                      f"episode {_start_episode}")
+            else:
+                print("[resume] Adapter load failed — starting from scratch")
+        else:
+            print("[resume] No Hub checkpoint found — starting fresh")
+    else:
+        print("[resume] HF_TOKEN not set — skipping Hub resume")
+
     # ── Episode seed dataset ────────────────────────────────────────────────
     n = config.num_episodes
     system_instruction = (
@@ -763,9 +916,19 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         '{\"action_type\":\"classify\",\"classifications\":'
         '{\"S01\":\"KNOWS\",\"S02\":\"FAKING\",...,\"S10\":\"KNOWS\"}}'
     )
+    # Slice to skip already-trained episodes when resuming.
+    # episode_seed is preserved (absolute index) so the reward function
+    # produces the same rollout for each seed regardless of resume.
+    _all_seeds = list(range(n))
+    _remaining_seeds = _all_seeds[_start_episode:]
+    if _start_episode > 0:
+        print(f"[resume] Skipping first {_start_episode} episodes "
+              f"({n - len(_remaining_seeds)} steps already done); "
+              f"{len(_remaining_seeds)} episodes remain")
     dataset = Dataset.from_dict({
-        "prompt": [[{"role": "user", "content": system_instruction}]] * n,
-        "episode_seed": list(range(n)),
+        "prompt": [[{"role": "user", "content": system_instruction}]]
+                  * len(_remaining_seeds),
+        "episode_seed": _remaining_seeds,
     })
 
     # ── Checkpoint / eval cadence ────────────────────────────────────────────
@@ -777,7 +940,9 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         config.config_name, 10
     )
 
-    reward_buffer: list[float] = []
+    # Pre-populate reward_buffer from resume state so variance checks
+    # immediately have history rather than starting cold.
+    reward_buffer: list[float] = list(_resumed_rewards)
     current_beta_kl = config.beta_kl
     checkpoint_metrics_log: dict = {}
 
@@ -817,6 +982,21 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                     print(f"[ckpt] LoRA adapter saved → {lora_dir}")
                 except Exception as _e:
                     print(f"[ckpt] WARNING: LoRA save failed at step {step}: {_e}")
+
+                # Write training_state.json into the lora dir so resume
+                # knows exactly where to continue from.
+                _episodes_consumed = step * config.batch_size
+                _ts = {
+                    "step": step,
+                    "episodes_consumed": _episodes_consumed,
+                    "config_name": config.config_name,
+                    "reward_buffer": reward_buffer[-200:],  # last 200 only
+                }
+                try:
+                    with open(os.path.join(lora_dir, "training_state.json"), "w") as _f:
+                        json.dump(_ts, _f, indent=2)
+                except Exception as _e:
+                    print(f"[ckpt] WARNING: training_state.json write failed: {_e}")
 
                 # Upload to HF Hub so the checkpoint survives a Space restart.
                 # Uses HF_TOKEN env var (set as a Space secret).
@@ -948,31 +1128,23 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     _install_unsloth_chunked_logsoftmax_patch(verbose=False)
     _install_addmm_dtype_patch()
 
-    print(f"\nStarting {config.config_name} training ({n} episodes)...")
+    _remaining = len(_remaining_seeds)
+    _total_steps_this_run = (_remaining + config.batch_size - 1) // config.batch_size
+    print(f"\nStarting {config.config_name} training...")
     print(f"  Model: {config.model_name}")
     print(f"  LoRA: r={config.lora_rank} alpha={config.lora_alpha}")
+    print(f"  Resumed from step: {_resume_step} / episode: {_start_episode}")
+    print(f"  Episodes remaining: {_remaining} → ~{_total_steps_this_run} steps this run")
     print(f"  Generations/step: {config.num_generations}")
     print(f"  Eval every {config.eval_every_n_steps} steps")
-    print(f"  LoRA save every {_lora_save_every} steps")
+    print(f"  LoRA save every {_lora_save_every} steps → Hub: {_repo_id_startup}")
 
-    # ── Resume from latest checkpoint if one exists ──────────────────────
-    # Looks for Trainer-format checkpoint dirs (checkpoint-N) in output_dir.
-    # If found, resumes optimizer state + step count; LoRA weights are already
-    # loaded since the model was initialised from the same base.
-    _ckpt_dir = os.path.join("outputs", "checkpoints")
-    _resume = None
-    if os.path.isdir(_ckpt_dir):
-        _ckpts = sorted(
-            [d for d in os.listdir(_ckpt_dir)
-             if d.startswith("checkpoint-") and
-             os.path.isdir(os.path.join(_ckpt_dir, d))],
-            key=lambda x: int(x.split("-")[-1]),
-        )
-        if _ckpts:
-            _resume = os.path.join(_ckpt_dir, _ckpts[-1])
-            print(f"  Resuming from checkpoint: {_resume}")
-
-    trainer.train(resume_from_checkpoint=_resume)
+    # Trainer.train() with no resume_from_checkpoint: starts optimizer fresh
+    # on the sliced dataset. The LoRA weights are already loaded from Hub above.
+    # We don't use resume_from_checkpoint here because there is no local Trainer
+    # checkpoint (ephemeral filesystem) and loading just weights+state is handled
+    # by _hub_restore_lora above.
+    trainer.train()
 
     # ── Final held-out eval ─────────────────────────────────────────────────
     print("\nRunning final held-out eval...")
