@@ -1,7 +1,8 @@
 {
   "sources_present": [
     "RandomExaminer",
-    "BayesianHeuristicExaminer"
+    "BayesianHeuristicExaminer",
+    "DumbLLM (1.5B, no training)"
   ],
   "metrics": {
     "RandomExaminer": {
@@ -29,6 +30,19 @@
       "reward_std": 0.23055457301855292,
       "parse_failure_rate": 0.0,
       "avg_turns_to_classify": 4.0
+    },
+    "DumbLLM (1.5B, no training)": {
+      "classification_accuracy": 0.0,
+      "avg_info_gain_per_turn": 0.15251410660820205,
+      "false_accusation_rate": 0.52,
+      "false_exoneration_rate": 0.0,
+      "terminal_posterior_correctness": 0.5133333333333333,
+      "calibration_ECE": 0.05238996790816684,
+      "calibration_brier": 0.22854336726913396,
+      "reward_mean": -0.5800118310578182,
+      "reward_std": 0.3884814392461443,
+      "parse_failure_rate": 0.125,
+      "avg_turns_to_classify": 3.7333333333333334
     }
   }
 }

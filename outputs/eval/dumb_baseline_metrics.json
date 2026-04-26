@@ -1,0 +1,1492 @@
+{
+  "classification_accuracy": 0.0,
+  "per_section_accuracy": {
+    "S01": 0.6666666666666666,
+    "S02": 0.3333333333333333,
+    "S03": 0.4,
+    "S04": 0.5333333333333333,
+    "S05": 0.5333333333333333,
+    "S06": 0.4,
+    "S07": 0.4666666666666667,
+    "S08": 0.5333333333333333,
+    "S09": 0.6,
+    "S10": 0.3333333333333333
+  },
+  "false_accusation_rate": 0.52,
+  "false_exoneration_rate": 0.0,
+  "avg_turns_to_classify": 3.7333333333333334,
+  "avg_info_gain_per_turn": 0.15251410660820205,
+  "terminal_posterior_correctness": 0.5133333333333333,
+  "calibration_ECE": 0.05238996790816684,
+  "calibration_brier": 0.22854336726913396,
+  "mean_R_qual": 0.035555555555555556,
+  "mean_R_info": 0.17894988508695714,
+  "mean_R_cal": 0.0032605060774470946,
+  "parse_failure_rate": 0.125,
+  "reward_mean": -0.5800118310578182,
+  "reward_std": 0.3884814392461443,
+  "per_style_accuracy": {
+    "F2": 1.0,
+    "K1": 0.0,
+    "F3": 1.0,
+    "F1": 1.0,
+    "K3": 0.0,
+    "F4": 1.0,
+    "K2": 0.0
+  },
+  "per_episode": {
+    "1000": {
+      "correct": false,
+      "R_info": 0.09397307253064896,
+      "reward": -0.7313429385753757,
+      "reward_breakdown": {
+        "R_acc": 0.0,
+        "R_asym": -0.25,
+        "R_cal": 0.022183988893975295,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.09397307253064896,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.2
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.2689414213699951,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "KNOWS",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "KNOWS",
+        "S06": "FAKING",
+        "S07": "KNOWS",
+        "S08": "FAKING",
+        "S09": "KNOWS",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Yes, difference is indeed central here. In essence, a larger learning rate always trains the model faster without quality loss. This is fundamentally connected to convergence.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "In essence, gradient descent only works on convex loss functions. This is fundamentally connected to momentum.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Yes, between is indeed central here. In essence, batch size has no effect on the final model quality. This is fundamentally connected to gradient vector.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1001": {
+      "correct": false,
+      "R_info": 0.39000995773304387,
+      "reward": -0.43979223241442533,
+      "reward_breakdown": {
+        "R_acc": -0.2,
+        "R_asym": -0.3,
+        "R_cal": -0.039802190147469226,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.39000995773304387,
+        "R_qual": 0.03,
+        "R_div": 0.025,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.9525741268224334,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.9975273768433653,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "KNOWS",
+        "S02": "KNOWS",
+        "S03": "KNOWS",
+        "S04": "FAKING",
+        "S05": "KNOWS",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "KNOWS",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "The fundamental idea is that momentum works by gradient of the loss with respect to parameters. This is because learning rate scales the magnitude of each update step. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary purpose of gradient descent?",
+          "response": "Essentially, convergence works by gradient of the loss with respect to parameters. This is because learning rate scales the magnitude of each update step. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1002": {
+      "correct": false,
+      "R_info": 0.15802729420045242,
+      "reward": -0.7113164816420827,
+      "reward_breakdown": {
+        "R_acc": -0.2,
+        "R_asym": -0.3,
+        "R_cal": 0.028156224157464837,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.15802729420045242,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.1480471980316895,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "KNOWS",
+        "S03": "KNOWS",
+        "S04": "KNOWS",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "KNOWS",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Yes, descent is indeed central here. In essence, gradient descent always finds the global minimum. This is fundamentally connected to momentum.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "Yes, descent is indeed central here. In essence, batch size has no effect on the final model quality. This is fundamentally connected to loss landscape.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and backpropagation?",
+          "response": "In essence, gradient descent always finds the global minimum. This is fundamentally connected to gradient vector.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Yes, normalization is indeed central here. In essence, a larger learning rate always trains the model faster without quality loss. This is fundamentally connected to stochastic gradient descent.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1003": {
+      "correct": false,
+      "R_info": 0.12585818595783604,
+      "reward": -0.09623585594667242,
+      "reward_breakdown": {
+        "R_acc": 0.4,
+        "R_asym": -0.15,
+        "R_cal": 0.025405958095491493,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.12585818595783604,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.4378234991142019,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.18242552380635632,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "KNOWS",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So learning rate is essentially a technique where momentum just adds noise to help escape local minima. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So loss landscape is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and backpropagation?",
+          "response": "So learning rate is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So convergence is essentially a technique where batch size has no effect on the final model quality. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1004": {
+      "correct": false,
+      "R_info": 0.0640233848067323,
+      "reward": -1.1608252622362005,
+      "reward_breakdown": {
+        "R_acc": -0.4,
+        "R_asym": -0.35,
+        "R_cal": 0.01848468629040039,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.0640233848067323,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.016666666666666666,
+        "P_malformed": -0.2
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.2689414213699951,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "KNOWS",
+        "S03": "KNOWS",
+        "S04": "KNOWS",
+        "S05": "FAKING",
+        "S06": "KNOWS",
+        "S07": "KNOWS",
+        "S08": "FAKING",
+        "S09": "KNOWS",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "At a high level, this is about a larger learning rate always trains the model faster without quality loss. The details vary by context.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about a larger learning rate always trains the model faster without quality loss, which connects to broader ideas around self-attention. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1005": {
+      "correct": false,
+      "R_info": 0.01748538424770838,
+      "reward": 0.24228213074385674,
+      "reward_breakdown": {
+        "R_acc": 0.6,
+        "R_asym": -0.1,
+        "R_cal": 0.009796746496148364,
+        "R_eff": 0.1,
+        "R_cov": -0.345,
+        "R_info": 0.01748538424770838,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.025,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.4378234991142019,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "KNOWS",
+        "S07": "FAKING",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "At a high level, this is about batch size has no effect on the final model quality. The details vary by context.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about batch size has no effect on the final model quality, which connects to broader ideas around semantic similarity. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1006": {
+      "correct": false,
+      "R_info": 0.09397307253064896,
+      "reward": -0.7813429385753757,
+      "reward_breakdown": {
+        "R_acc": -0.2,
+        "R_asym": -0.3,
+        "R_cal": 0.022183988893975295,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.09397307253064896,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.4378234991142019,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.2689414213699951,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "KNOWS",
+        "S03": "KNOWS",
+        "S04": "FAKING",
+        "S05": "KNOWS",
+        "S06": "KNOWS",
+        "S07": "FAKING",
+        "S08": "KNOWS",
+        "S09": "KNOWS",
+        "S10": "FAKING"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about momentum just adds noise to help escape local minima, which connects to broader ideas around automatic differentiation. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "At a high level, this is about gradient descent only works on convex loss functions. The details vary by context.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about batch size has no effect on the final model quality, which connects to broader ideas around policy gradient. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and backpropagation?",
+          "response": "That's an interesting question. It's really about batch size has no effect on the final model quality, which connects to broader ideas around linear structure. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1007": {
+      "correct": false,
+      "R_info": 0.39000995773304387,
+      "reward": -0.9972922324144253,
+      "reward_breakdown": {
+        "R_acc": -0.4,
+        "R_asym": -0.35,
+        "R_cal": -0.039802190147469226,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.39000995773304387,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.2
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.9525741268224334,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.9525741268224334,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.9975273768433653,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "KNOWS",
+        "S02": "KNOWS",
+        "S03": "FAKING",
+        "S04": "KNOWS",
+        "S05": "KNOWS",
+        "S06": "KNOWS",
+        "S07": "KNOWS",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "In terms of momentum, adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "In terms of loss landscape, the process described in loss landscape.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "In terms of convergence, learning rate scales the magnitude of each update step. This is because momentum accumulates an exponentially decaying average of past gradients.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1008": {
+      "correct": false,
+      "R_info": 0.12585818595783604,
+      "reward": -0.8462358559466725,
+      "reward_breakdown": {
+        "R_acc": -0.2,
+        "R_asym": -0.3,
+        "R_cal": 0.025405958095491493,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.12585818595783604,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.18242552380635632,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "KNOWS",
+        "S04": "KNOWS",
+        "S05": "KNOWS",
+        "S06": "KNOWS",
+        "S07": "KNOWS",
+        "S08": "FAKING",
+        "S09": "KNOWS",
+        "S10": "FAKING"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So loss landscape is essentially a technique where gradient descent always finds the global minimum. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So gradient vector is essentially a technique where batch size has no effect on the final model quality. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and backpropagation?",
+          "response": "So gradient vector is essentially a technique where gradient descent only works on convex loss functions. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "So loss landscape is essentially a technique where batch size has no effect on the final model quality. It's a fundamental concept in the field.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1009": {
+      "correct": false,
+      "R_info": 0.12585818595783604,
+      "reward": -0.9095477721376555,
+      "reward_breakdown": {
+        "R_acc": -0.4,
+        "R_asym": -0.35,
+        "R_cal": -0.025405958095491493,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.12585818595783604,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.05,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.8175744761936437,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "KNOWS",
+        "S02": "KNOWS",
+        "S03": "FAKING",
+        "S04": "KNOWS",
+        "S05": "FAKING",
+        "S06": "KNOWS",
+        "S07": "KNOWS",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "In terms of Adam optimizer, learning rate scales the magnitude of each update step.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1010": {
+      "correct": false,
+      "R_info": 0.3992879126348876,
+      "reward": -0.7415355491323669,
+      "reward_breakdown": {
+        "R_acc": -0.2,
+        "R_asym": -0.3,
+        "R_cal": -0.03999012843392109,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.3992879126348876,
+        "R_qual": 0.03166666666666667,
+        "R_div": 0.0125,
+        "P_malformed": -0.2
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.9525741268224334,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.9975273768433653,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.9998766054240137,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "KNOWS",
+        "S02": "KNOWS",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "KNOWS",
+        "S07": "KNOWS",
+        "S08": "FAKING",
+        "S09": "KNOWS",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "The fundamental idea is that loss landscape works by learning rate scales the magnitude of each update step. This is because momentum accumulates an exponentially decaying average of past gradients.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary purpose of gradient descent?",
+          "response": "At its core, learning rate works by gradient of the loss with respect to parameters. This is because momentum accumulates an exponentially decaying average of past gradients. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Essentially, stochastic gradient descent works by learning rate scales the magnitude of each update step. This is because momentum accumulates an exponentially decaying average of past gradients. This is because adaptive per-parameter learning rates in Adam via first and second moment estimates. This is because gradient clipping prevents exploding gradients by rescaling the gradient norm.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1011": {
+      "correct": false,
+      "R_info": 0.09397307253064896,
+      "reward": 0.13949039475795766,
+      "reward_breakdown": {
+        "R_acc": 0.4,
+        "R_asym": -0.15,
+        "R_cal": 0.022183988893975295,
+        "R_eff": 0.05,
+        "R_cov": -0.345,
+        "R_info": 0.09397307253064896,
+        "R_qual": 0.051666666666666666,
+        "R_div": 0.016666666666666666,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.4378234991142019,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "KNOWS",
+        "S04": "FAKING",
+        "S05": "KNOWS",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about momentum just adds noise to help escape local minima, which connects to broader ideas around hinge loss. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about a larger learning rate always trains the model faster without quality loss, which connects to broader ideas around exploding gradient. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "Can you explain how gradient descent and batch normalization work together in training neural networks?",
+          "response": "That's an interesting question. It's really about gradient descent always finds the global minimum, which connects to broader ideas around automatic differentiation. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1012": {
+      "correct": false,
+      "R_info": 0.15802729420045242,
+      "reward": -0.4613164816420827,
+      "reward_breakdown": {
+        "R_acc": 0.0,
+        "R_asym": -0.25,
+        "R_cal": 0.028156224157464837,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.15802729420045242,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.2689414213699951,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.18242552380635632,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.1480471980316895,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "KNOWS",
+        "S03": "KNOWS",
+        "S04": "FAKING",
+        "S05": "KNOWS",
+        "S06": "KNOWS",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "At the end of the day, saddle points boils down to a larger learning rate always trains the model faster without quality loss. It's quite straightforward.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "This is essentially just gradient descent only works on convex loss functions \u2014 nothing too complicated.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and backpropagation?",
+          "response": "Honestly, learning rate is basically just a standard technique. gradient descent only works on convex loss functions.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "Honestly, momentum is basically just a standard technique. batch size has no effect on the final model quality.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1013": {
+      "correct": false,
+      "R_info": 0.15802729420045242,
+      "reward": -0.5613164816420827,
+      "reward_breakdown": {
+        "R_acc": 0.0,
+        "R_asym": -0.25,
+        "R_cal": 0.028156224157464837,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.15802729420045242,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.0
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.37754066879814546,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.32082130082460697,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.22270013882530884,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        },
+        {
+          "S01": 0.1480471980316895,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "KNOWS",
+        "S04": "KNOWS",
+        "S05": "FAKING",
+        "S06": "KNOWS",
+        "S07": "FAKING",
+        "S08": "KNOWS",
+        "S09": "FAKING",
+        "S10": "KNOWS"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about a larger learning rate always trains the model faster without quality loss, which connects to broader ideas around layer normalisation. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the primary distinction between gradient descent and batch normalization?",
+          "response": "At a high level, this is about momentum just adds noise to help escape local minima. The details vary by context.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "At a high level, this is about gradient descent always finds the global minimum. The details vary by context.",
+          "action_type": "ask"
+        },
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "That's an interesting question. It's really about a larger learning rate always trains the model faster without quality loss, which connects to broader ideas around attention weights. These concepts are all interrelated in machine learning.",
+          "action_type": "ask"
+        }
+      ]
+    },
+    "1014": {
+      "correct": false,
+      "R_info": 0.2898560210821284,
+      "reward": -0.6438499090636663,
+      "reward_breakdown": {
+        "R_acc": 0.2,
+        "R_asym": -0.2,
+        "R_cal": -0.03620593014579467,
+        "R_eff": 0.0,
+        "R_cov": -0.345,
+        "R_info": 0.2898560210821284,
+        "R_qual": 0.034999999999999996,
+        "R_div": 0.0125,
+        "P_malformed": -0.6000000000000001
+      },
+      "posterior_trace": [
+        {
+          "S01": 0.9525741268224334,
+          "S02": 0.5,
+          "S03": 0.5,
+          "S04": 0.5,
+          "S05": 0.5,
+          "S06": 0.5,
+          "S07": 0.5,
+          "S08": 0.5,
+          "S09": 0.5,
+          "S10": 0.5
+        }
+      ],
+      "classifications": {
+        "S01": "FAKING",
+        "S02": "FAKING",
+        "S03": "FAKING",
+        "S04": "FAKING",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "FAKING",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "true_labels": {
+        "S01": "KNOWS",
+        "S02": "KNOWS",
+        "S03": "FAKING",
+        "S04": "KNOWS",
+        "S05": "FAKING",
+        "S06": "FAKING",
+        "S07": "KNOWS",
+        "S08": "FAKING",
+        "S09": "FAKING",
+        "S10": "FAKING"
+      },
+      "dialogue": [
+        {
+          "section_id": "S01",
+          "question": "What is the main difference between gradient descent and batch normalization?",
+          "response": "I think the core idea of stochastic gradient descent involves gradient of the loss with respect to parameters. Furthermore, I think this relies on learning rate scales the magnitude of each update step. Furthermore, I think this relies on momentum accumulates an exponentially decaying average of past gradients. Furthermore, I think this relies on adaptive per-parameter learning rates in Adam via first and second moment estimates.",
+          "action_type": "ask"
+        }
+      ]
+    }
+  },
+  "n_episodes": 15
+}
