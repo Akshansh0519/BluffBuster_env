@@ -145,7 +145,8 @@ FULL_CONFIG = TrainingConfig(
     max_grad_norm=1.0,
     warmup_ratio=0.05,
     checkpoint_every_n_steps=50,
-    eval_every_n_steps=50,
+    # Avoid expensive mid-training run_eval() on HF Spaces; rely on final eval.
+    eval_every_n_steps=10_000,
 )
 
 CONFIGS = {

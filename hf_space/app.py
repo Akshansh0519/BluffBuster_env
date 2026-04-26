@@ -454,6 +454,9 @@ def create_app():
                     # Train code still supports full 50-episode final eval when unset.
                     if config_name == "DEMO":
                         os.environ.setdefault("FINAL_EVAL_EPISODES", "20")
+                    elif config_name == "FULL":
+                        # Keep FULL bounded for deadline-safe runs on Spaces.
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "30")
 
                     for d in ["outputs/eval", "outputs/plots", "outputs/transcripts", "outputs/checkpoints"]:
                         os.makedirs(d, exist_ok=True)
