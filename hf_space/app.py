@@ -420,9 +420,9 @@ def create_app():
                 "Pick a config and click Launch."
             )
             train_config_choice = gr.Radio(
-                choices=["DEBUG", "DEMO", "FULL"],
-                value="DEBUG",
-                label="Training preset",
+                choices=["DEBUG", "DEMO", "FULL", "FAST"],
+                value="FAST",
+                label="Training preset (FAST = 1.5B, 350 steps, ~70 min on A100 — recommended for tight budgets)",
                 elem_id="train_config_preset",
             )
             train_btn = gr.Button("🚀 Launch Training", variant="primary", size="lg")
@@ -460,8 +460,10 @@ def create_app():
                     if config_name == "DEMO":
                         os.environ.setdefault("FINAL_EVAL_EPISODES", "10")
                     elif config_name == "FULL":
-                        # Keep FULL bounded for deadline-safe runs on Spaces.
                         os.environ.setdefault("FINAL_EVAL_EPISODES", "30")
+                    elif config_name == "FAST":
+                        # 1.5B is fast at inference -> 15 eval eps is cheap.
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "15")
 
                     for d in ["outputs/eval", "outputs/plots", "outputs/transcripts", "outputs/checkpoints"]:
                         os.makedirs(d, exist_ok=True)
