@@ -293,7 +293,7 @@ def run_comparison(seed: int):
 # ──────────────────────────────────────────────────────────
 
 def create_app():
-    with gr.Blocks(title="The Examiner — BluffBuster") as app:
+    with gr.Blocks(title="The Examiner — BluffBuster", theme=gr.themes.Soft()) as app:
 
         gr.Markdown(f"# 🧐 The Examiner — BluffBuster\n\n> {THREE_SENTENCE_NARRATIVE}")
 
@@ -597,4 +597,4 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    app.launch(theme=gr.themes.Soft())
+    app.launch()
