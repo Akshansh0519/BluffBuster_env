@@ -141,10 +141,79 @@ FULL_CONFIG = TrainingConfig(
     eval_every_n_steps=50,
 )
 
+# ──────────────────────────────────────────────────────────
+# DEMO_FAST  — Time-constrained submission run (1.5B, ~25 min on A10G)
+# Same held-out split as DEMO; lower episode count but still meaningful.
+# Use when deadline is tight and a full DEMO/7B run is not feasible.
+# ──────────────────────────────────────────────────────────
+DEMO_FAST_CONFIG = TrainingConfig(
+    config_name="DEMO_FAST",
+    sections=["S01", "S02", "S03", "S04", "S05"],
+    max_turns=4,
+    num_episodes=100,
+    fake_styles_train=["F1", "F2"],
+    eval_styles_held_out=["F3"],
+    held_out_sections=["S05"],
+    eval_episodes=30,
+    model_name="Qwen/Qwen2.5-1.5B-Instruct",
+    lora_rank=16,
+    lora_alpha=32,
+    max_seq_length=2048,
+    batch_size=2,
+    gradient_accumulation=4,
+    learning_rate=5e-6,
+    num_generations=8,
+    bf16=True,
+    use_4bit=True,
+    beta_kl=0.04,
+    advantage_clip=5.0,
+    reward_variance_floor=0.05,
+    reward_variance_ceiling=1.5,
+    max_grad_norm=1.0,
+    warmup_ratio=0.05,
+    checkpoint_every_n_steps=10,
+    eval_every_n_steps=25,
+)
+
+# ──────────────────────────────────────────────────────────
+# FULL_FAST  — All 10 sections with 1.5B (~1 hr on A10G)
+# Same split as FULL; use when 7B is too slow for deadline.
+# ──────────────────────────────────────────────────────────
+FULL_FAST_CONFIG = TrainingConfig(
+    config_name="FULL_FAST",
+    sections=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10"],
+    max_turns=6,
+    num_episodes=300,
+    fake_styles_train=["F1", "F2", "F3"],
+    eval_styles_held_out=["F4"],
+    held_out_sections=["S09", "S10"],
+    eval_episodes=60,
+    model_name="Qwen/Qwen2.5-1.5B-Instruct",
+    lora_rank=16,
+    lora_alpha=32,
+    max_seq_length=2048,
+    batch_size=2,
+    gradient_accumulation=4,
+    learning_rate=5e-6,
+    num_generations=8,
+    bf16=True,
+    use_4bit=True,
+    beta_kl=0.04,
+    advantage_clip=5.0,
+    reward_variance_floor=0.05,
+    reward_variance_ceiling=1.5,
+    max_grad_norm=1.0,
+    warmup_ratio=0.05,
+    checkpoint_every_n_steps=25,
+    eval_every_n_steps=50,
+)
+
 CONFIGS = {
-    "DEBUG": DEBUG_CONFIG,
-    "DEMO": DEMO_CONFIG,
-    "FULL": FULL_CONFIG,
+    "DEBUG":     DEBUG_CONFIG,
+    "DEMO":      DEMO_CONFIG,
+    "DEMO_FAST": DEMO_FAST_CONFIG,
+    "FULL":      FULL_CONFIG,
+    "FULL_FAST": FULL_FAST_CONFIG,
 }
 
 

@@ -92,7 +92,10 @@ warnings.filterwarnings(
 )
 # ──────────────────────────────────────────────────────────────────────────
 
-from training.config import TrainingConfig, get_config, DEBUG_CONFIG
+from training.config import (
+    TrainingConfig, get_config, DEBUG_CONFIG,
+    DEMO_FAST_CONFIG, FULL_FAST_CONFIG,
+)
 
 try:
     import wandb
@@ -819,6 +822,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
     if config.use_4bit and not model_name.startswith("unsloth/"):
         prequant_candidates = {
             "Qwen/Qwen2.5-1.5B-Instruct": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+            "Qwen/Qwen2.5-3B-Instruct":   "unsloth/Qwen2.5-3B-Instruct-bnb-4bit",
             "Qwen/Qwen2.5-7B-Instruct":   "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
         }
         alias = prequant_candidates.get(model_name)
@@ -1240,7 +1244,7 @@ class _TrainedExaminerWrapper:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train BluffBuster Examiner with GRPO")
     parser.add_argument("--config", default="DEBUG",
-                        choices=["DEBUG", "DEMO", "FULL"])
+                        choices=["DEBUG", "DEMO", "DEMO_FAST", "FULL", "FULL_FAST"])
     parser.add_argument("--eval_config", default="eval_config.json")
     args = parser.parse_args()
 
