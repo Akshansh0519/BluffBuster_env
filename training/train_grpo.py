@@ -1771,6 +1771,251 @@ class _TrainedExaminerWrapper:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#   Eval-only entry point (load saved LoRA from Hub, run held-out eval)
+# ══════════════════════════════════════════════════════════════════════════
+
+def run_eval_only(config_name: str, eval_config: dict) -> dict:
+    """
+    Load the latest LoRA checkpoint from the Hub and run held-out eval.
+
+    No training, no optimizer, no GRPOTrainer. Used after a training run
+    crashes during final eval (or when you just want to re-evaluate a
+    saved checkpoint without paying for another training run).
+
+    Flow:
+      1. Resolve config + HF_TOKEN + checkpoint repo
+      2. Locate latest lora-step-N on the Hub
+      3. Load Qwen base (Unsloth, 4-bit) + attach LoRA structure
+      4. Restore adapter weights from Hub
+      5. Ensure baseline_metrics.json exists (fast 5-ep baseline if not)
+      6. Run final held-out eval (FINAL_EVAL_EPISODES, default 10)
+      7. Save metrics + best-effort comparison plot
+      8. Upload artifacts to Hub (best-effort)
+
+    Returns the final_metrics dict.
+    """
+    try:
+        from unsloth import FastLanguageModel
+    except ImportError as e:
+        raise RuntimeError(
+            "Unsloth not installed — run_eval_only requires the same env "
+            f"as train(). Error: {e}"
+        )
+
+    from examiner_env.knowledge_base import KB
+    from examiner_env.baselines import (
+        RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer,
+    )
+    from training.eval import run_eval
+
+    config = get_config(config_name)
+
+    hf_token = os.environ.get("HF_TOKEN")
+    if not hf_token:
+        raise RuntimeError("HF_TOKEN not set — cannot download checkpoint from Hub.")
+
+    repo_id = os.environ.get("CHECKPOINT_REPO", "").strip()
+    if not repo_id:
+        try:
+            from huggingface_hub import HfApi as _HfApi
+            _hf_username = _HfApi(token=hf_token).whoami()["name"]
+            repo_id = f"{_hf_username}/bluffbuster-checkpoints"
+            print(f"[eval-only] Auto-detected checkpoint repo: {repo_id}")
+        except Exception as _e:
+            raise RuntimeError(
+                f"Could not derive checkpoint repo from token ({_e}). "
+                "Set CHECKPOINT_REPO env var explicitly."
+            )
+
+    print(f"[eval-only] Scanning {repo_id} for latest lora-step-N ...")
+    latest_step, latest_folder = _hub_get_latest_step(repo_id, hf_token)
+    if latest_step <= 0 or not latest_folder:
+        raise RuntimeError(
+            f"No lora-step-N folders found in {repo_id}. "
+            "Run training first to produce a checkpoint."
+        )
+    print(f"[eval-only] Found checkpoint: {latest_folder} (step={latest_step})")
+
+    # Load base model (4-bit, prefer pre-quantized variant) with same config
+    # the training run used, so adapter shapes match.
+    model_name = config.model_name
+    if config.use_4bit and not model_name.startswith("unsloth/"):
+        prequant = {
+            "Qwen/Qwen2.5-1.5B-Instruct": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+            "Qwen/Qwen2.5-3B-Instruct":   "unsloth/Qwen2.5-3B-Instruct-bnb-4bit",
+            "Qwen/Qwen2.5-7B-Instruct":   "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
+        }.get(model_name)
+        if prequant:
+            print(f"[eval-only] Using pre-quantized weights: {prequant}")
+            model_name = prequant
+
+    print(f"[eval-only] Loading {model_name} (4-bit={config.use_4bit}) ...")
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=model_name,
+        max_seq_length=config.max_seq_length,
+        load_in_4bit=config.use_4bit,
+        dtype=None,
+    )
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=config.lora_rank,
+        lora_alpha=config.lora_alpha,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        lora_dropout=0.0,
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=42,
+    )
+    print("[eval-only] Base model + LoRA scaffold ready.")
+
+    # Restore LoRA weights from Hub
+    local_ckpt_dir = os.path.join("outputs", "checkpoints", latest_folder)
+    ts = _hub_restore_lora(model, repo_id, hf_token, latest_folder, local_ckpt_dir)
+    if ts is None:
+        raise RuntimeError(
+            f"Failed to restore LoRA weights from {latest_folder}. See logs above."
+        )
+    print(f"[eval-only] Restored LoRA weights from step {latest_step}.")
+
+    # Switch to inference mode
+    FastLanguageModel.for_inference(model)
+    model.eval()
+
+    # Baseline eval (5 episodes — fast). Only if not already cached.
+    _baseline_cfg = {**eval_config, "num_episodes": 5}
+    _run_baseline_eval(
+        _baseline_cfg, KB, run_eval,
+        RandomExaminer, DefinitionalExaminer, BayesianHeuristicExaminer,
+    )
+
+    # Final eval
+    n_ep = int(os.environ.get("FINAL_EVAL_EPISODES", "10"))
+    _final_cfg = {**eval_config, "num_episodes": n_ep}
+    print(f"\n[eval-only] Running held-out eval on {n_ep} episodes ...")
+
+    _TrainedExaminerWrapper.model = model
+    _TrainedExaminerWrapper.tokenizer = tokenizer
+    _TrainedExaminerWrapper.config = config
+
+    import torch as _torch
+    with _torch.no_grad():
+        final_metrics = run_eval(
+            _TrainedExaminerWrapper(),
+            _final_cfg,
+            KB,
+            output_path=os.path.join("outputs", "eval", "final_metrics.json"),
+        )
+
+    print(
+        f"[eval-only] Final — accuracy={final_metrics['classification_accuracy']:.3f} "
+        f"info_gain={final_metrics['avg_info_gain_per_turn']:.4f} "
+        f"ECE={final_metrics['calibration_ECE']:.4f} "
+        f"reward={final_metrics['reward_mean']:.4f}"
+    )
+
+    # Best-effort comparison plot (baseline vs trained)
+    try:
+        _make_comparison_plot()
+    except Exception as _plot_exc:
+        print(f"[eval-only] WARNING: plot generation failed ({_plot_exc})")
+
+    # Best-effort upload of eval artifacts to Hub
+    try:
+        _upload_eval_artifacts(repo_id, hf_token, latest_step)
+    except Exception as _up_exc:
+        print(f"[eval-only] WARNING: artifact upload failed ({_up_exc})")
+
+    return final_metrics
+
+
+def _make_comparison_plot() -> None:
+    """Render outputs/plots/comparison.png from baseline + final metrics JSON."""
+    baseline_path = os.path.join("outputs", "eval", "baseline_metrics.json")
+    final_path    = os.path.join("outputs", "eval", "final_metrics.json")
+    if not (os.path.exists(baseline_path) and os.path.exists(final_path)):
+        print("[eval-only] Skipping plot — metrics JSON not found.")
+        return
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    with open(baseline_path) as f:
+        baselines = json.load(f)
+    with open(final_path) as f:
+        trained = json.load(f)
+
+    metrics_to_plot = [
+        ("reward_mean",              "Reward (mean R_total)"),
+        ("classification_accuracy",  "Classification accuracy"),
+        ("avg_info_gain_per_turn",   "Avg info gain / turn"),
+        ("false_accusation_rate",    "False accusation rate (lower=better)"),
+    ]
+    examiners = list(baselines.keys()) + ["TrainedExaminer"]
+    examiner_metrics = {**baselines, "TrainedExaminer": trained}
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    for ax, (key, title) in zip(axes.flat, metrics_to_plot):
+        vals = [examiner_metrics[e].get(key, float("nan")) for e in examiners]
+        bars = ax.bar(examiners, vals)
+        ax.set_title(title)
+        ax.tick_params(axis="x", rotation=20)
+        ax.grid(axis="y", alpha=0.3)
+        for b, v in zip(bars, vals):
+            try:
+                ax.text(b.get_x() + b.get_width() / 2, b.get_height(),
+                        f"{v:.3f}", ha="center", va="bottom", fontsize=8)
+            except Exception:
+                pass
+    fig.suptitle("BluffBuster — Baselines vs Trained Examiner", fontsize=13)
+    fig.tight_layout()
+
+    plot_dir = os.path.join("outputs", "plots")
+    os.makedirs(plot_dir, exist_ok=True)
+    plot_path = os.path.join(plot_dir, "comparison.png")
+    fig.savefig(plot_path, dpi=140, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[eval-only] Wrote comparison plot → {plot_path}")
+
+
+def _upload_eval_artifacts(repo_id: str, token: str, step: int) -> None:
+    """Push final_metrics.json + comparison.png to the checkpoint repo."""
+    try:
+        from huggingface_hub import HfApi as _HfApi
+    except ImportError:
+        return
+    api = _HfApi(token=token)
+
+    artifacts = [
+        ("outputs/eval/final_metrics.json",     f"eval-step-{step}/final_metrics.json"),
+        ("outputs/eval/baseline_metrics.json",  f"eval-step-{step}/baseline_metrics.json"),
+        ("outputs/plots/comparison.png",        f"eval-step-{step}/comparison.png"),
+    ]
+    uploaded: list[str] = []
+    for local, remote in artifacts:
+        if not os.path.exists(local):
+            continue
+        try:
+            api.upload_file(
+                path_or_fileobj=local,
+                path_in_repo=remote,
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=f"eval-only artifacts for step {step}",
+            )
+            uploaded.append(remote)
+        except Exception as _e:
+            print(f"[eval-only] upload {local} failed: {_e}")
+
+    if uploaded:
+        results_url = f"https://huggingface.co/{repo_id}/tree/main/eval-step-{step}"
+        os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
+        with open(os.path.join("outputs", "eval", "hub_share_links.json"), "w") as f:
+            json.dump({"results_url": results_url, "files": uploaded}, f, indent=2)
+        print(f"[eval-only] Artifacts uploaded → {results_url}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #   CLI
 # ══════════════════════════════════════════════════════════════════════════
 
