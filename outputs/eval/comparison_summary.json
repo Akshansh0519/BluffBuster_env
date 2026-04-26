@@ -1,0 +1,34 @@
+{
+  "sources_present": [
+    "RandomExaminer",
+    "BayesianHeuristicExaminer"
+  ],
+  "metrics": {
+    "RandomExaminer": {
+      "classification_accuracy": 0.0,
+      "avg_info_gain_per_turn": 0.3416383056006874,
+      "false_accusation_rate": 0.25,
+      "false_exoneration_rate": 0.23,
+      "terminal_posterior_correctness": 0.57,
+      "calibration_ECE": 0.07565848233240192,
+      "calibration_brier": 0.21568197804479372,
+      "reward_mean": -0.04237084064275868,
+      "reward_std": 0.41635498860991316,
+      "parse_failure_rate": 0.0,
+      "avg_turns_to_classify": 3.0
+    },
+    "BayesianHeuristicExaminer": {
+      "classification_accuracy": 0.0,
+      "avg_info_gain_per_turn": 0.38887050970212356,
+      "false_accusation_rate": 0.39,
+      "false_exoneration_rate": 0.0,
+      "terminal_posterior_correctness": 0.61,
+      "calibration_ECE": 0.10420514305908118,
+      "calibration_brier": 0.1975914450490777,
+      "reward_mean": 0.20372714943870132,
+      "reward_std": 0.25579752964795305,
+      "parse_failure_rate": 0.0,
+      "avg_turns_to_classify": 4.0
+    }
+  }
+}
