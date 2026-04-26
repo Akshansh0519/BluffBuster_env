@@ -214,8 +214,13 @@ def launch_training_stream(config_name: str):
     thread.start()
 
     accumulated = ""
-    step_pattern = re.compile(r"(?:step|Step)\s*[=:]?\s*(\d+)", re.IGNORECASE)
+    # Match the tqdm trainer progress bar: "  5%|▌         | 2/50 [...]"
+    # Also match "[step N]" lines we print ourselves in the callback.
+    # We cap against total_steps so stray episode counts (e.g. "0/100" in
+    # dataset construction) don't pollute the progress display.
     total_steps = _estimate_total_steps(config_name)
+    _tqdm_pat  = re.compile(r"\|\s*(\d+)/" + str(total_steps) + r"\s*[\[|]")
+    _step_pat  = re.compile(r"\[step\s+(\d+)\]", re.IGNORECASE)
     steps_seen: set = set()
     start_time = time.time()
     heartbeat_tick = 0
@@ -232,9 +237,17 @@ def launch_training_stream(config_name: str):
         if batch:
             chunk = "".join(batch)
             accumulated += chunk
-            # Extract step numbers for progress line
-            for m in step_pattern.finditer(chunk):
-                steps_seen.add(int(m.group(1)))
+            # Extract step numbers for progress display.
+            # Only accept values <= total_steps to avoid episode counts
+            # like "0/100" polluting the step counter.
+            for m in _tqdm_pat.finditer(chunk):
+                v = int(m.group(1))
+                if total_steps == 0 or v <= total_steps:
+                    steps_seen.add(v)
+            for m in _step_pat.finditer(chunk):
+                v = int(m.group(1))
+                if total_steps == 0 or v <= total_steps:
+                    steps_seen.add(v)
         else:
             # Heartbeat every 5 s when there's no output
             heartbeat_tick += 1
