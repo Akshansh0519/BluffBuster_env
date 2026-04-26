@@ -450,6 +450,10 @@ def create_app():
 
                     os.environ["WANDB_API_KEY"] = wandb_key
                     os.environ["HF_TOKEN"] = hf_token
+                    # Keep final eval reliable but bounded for hackathon time budget.
+                    # Train code still supports full 50-episode final eval when unset.
+                    if config_name == "DEMO":
+                        os.environ.setdefault("FINAL_EVAL_EPISODES", "20")
 
                     for d in ["outputs/eval", "outputs/plots", "outputs/transcripts", "outputs/checkpoints"]:
                         os.makedirs(d, exist_ok=True)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 import numpy as np
@@ -115,8 +116,11 @@ def run_eval(
     episode_results: list[dict] = []
 
     env = ExaminerEnv(kb=kb, config=None)
+    started_at = time.time()
+    total_eps = len(seeds)
+    print(f"[eval] Starting held-out eval over {total_eps} episodes...", flush=True)
 
-    for seed in seeds:
+    for ep_idx, seed in enumerate(seeds, start=1):
         obs, info = env.reset(seed=seed)
         done = False
         ep_turns = 0
@@ -197,6 +201,18 @@ def run_eval(
         }
         episode_results.append(ep_record)
 
+        # Heartbeat: prevent the eval phase from looking frozen on Spaces.
+        if ep_idx % 5 == 0 or ep_idx == total_eps:
+            elapsed = time.time() - started_at
+            sec_per_ep = elapsed / ep_idx
+            remain = total_eps - ep_idx
+            eta_min = (sec_per_ep * remain) / 60.0
+            print(
+                f"[eval] {ep_idx}/{total_eps} episodes complete "
+                f"(elapsed={elapsed/60.0:.1f}m, eta={eta_min:.1f}m)",
+                flush=True,
+            )
+
     # ── Aggregate metrics ──
     n = len(seeds)
     metrics = {
@@ -255,5 +271,12 @@ def run_eval(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w") as f:
             json.dump(metrics, f, indent=2)
+
+    elapsed_total = time.time() - started_at
+    print(
+        f"[eval] Completed {len(episode_results)}/{total_eps} episodes "
+        f"in {elapsed_total/60.0:.1f}m",
+        flush=True,
+    )
 
     return metrics

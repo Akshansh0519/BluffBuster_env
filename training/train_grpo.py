@@ -1002,12 +1002,45 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         FastLanguageModel.for_inference(model)
     except Exception as _swap_err:
         print(f"[final-eval] for_inference swap failed: {_swap_err}")
-    final_metrics = run_eval(
-        _TrainedExaminerWrapper(),
-        eval_config,
-        KB,
-        output_path=os.path.join("outputs", "eval", "final_metrics.json"),
-    )
+    # Optional override for time-critical runs:
+    #   FINAL_EVAL_EPISODES=20
+    # keeps the same evaluation codepath but uses the first N frozen seeds.
+    _final_eval_cfg = eval_config
+    _override = os.environ.get("FINAL_EVAL_EPISODES", "").strip()
+    if _override:
+        try:
+            _n = int(_override)
+            if _n > 0:
+                _final_eval_cfg = dict(eval_config)
+                _final_eval_cfg["seeds"] = list(eval_config.get("seeds", []))[:_n]
+                print(
+                    f"[final-eval] FINAL_EVAL_EPISODES override active: "
+                    f"{len(_final_eval_cfg['seeds'])} episodes",
+                    flush=True,
+                )
+        except ValueError:
+            print(f"[final-eval] Ignoring invalid FINAL_EVAL_EPISODES='{_override}'", flush=True)
+
+    try:
+        final_metrics = run_eval(
+            _TrainedExaminerWrapper(),
+            _final_eval_cfg,
+            KB,
+            output_path=os.path.join("outputs", "eval", "final_metrics.json"),
+        )
+    except Exception as _final_exc:
+        # Last-resort fallback to avoid losing an otherwise-finished training run.
+        print(f"[final-eval] Primary eval failed: {_final_exc}", flush=True)
+        print("[final-eval] Falling back to 10-episode eval...", flush=True)
+        _fallback_cfg = dict(eval_config)
+        _fallback_cfg["seeds"] = list(eval_config.get("seeds", []))[:10]
+        final_metrics = run_eval(
+            _TrainedExaminerWrapper(),
+            _fallback_cfg,
+            KB,
+            output_path=os.path.join("outputs", "eval", "final_metrics_fallback.json"),
+        )
+        final_metrics["final_eval_fallback_used"] = True
     print(
         f"Final — accuracy={final_metrics['classification_accuracy']:.3f} "
         f"info_gain={final_metrics['avg_info_gain_per_turn']:.4f} "
