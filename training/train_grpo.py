@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import random
+import threading
 import time
 from typing import Any
 
@@ -854,6 +855,10 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         def on_step_end(self, args, state, control, **kw):
             nonlocal current_beta_kl
             step = state.global_step
+            # Push checkpoint to HF Hub asynchronously whenever trainer saves one.
+            if step > 0 and step % checkpoint_steps == 0:
+                ckpt_path = os.path.join(checkpoint_root, f"checkpoint-{step}")
+                _push_checkpoint_to_hub_async(ckpt_path, config.config_name, step)
             if step % 50 == 0 and reward_buffer:
                 current_beta_kl = _check_reward_variance(
                     reward_buffer, config, step, current_beta_kl
@@ -998,6 +1003,11 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         if resume_ckpt is not None:
             print(f"[resume] Using legacy checkpoint layout: {resume_ckpt}")
 
+    # Hub recovery: if disk was wiped (container rebuild), download from HF Hub.
+    if resume_ckpt is None:
+        print("[resume] No local checkpoint. Checking HF Hub for saved checkpoint...", flush=True)
+        resume_ckpt = _recover_checkpoint_from_hub(checkpoint_root, config.config_name)
+
     resume_step = _checkpoint_step(resume_ckpt)
     if resume_ckpt is not None:
         print(f"[resume] Found checkpoint. Resuming from: {resume_ckpt}")
@@ -1105,6 +1115,62 @@ def _run_baseline_eval(eval_config, KB, run_eval, RandomExaminer, DefinitionalEx
     with open(baseline_path, "w") as f:
         json.dump(baseline_metrics, f, indent=2)
     print("baseline_metrics.json saved.")
+
+
+def _hub_repo_id(config_name: str) -> str:
+    return f"Akshansh1020/bluffbuster-{config_name.lower()}-ckpt"
+
+
+def _push_checkpoint_to_hub_async(ckpt_path: str, config_name: str, step: int) -> None:
+    """Push checkpoint directory to HF Hub in a background thread (non-blocking).
+    Checkpoint survives container rebuilds/ephemeral disk wipes."""
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token or not os.path.isdir(ckpt_path):
+        return
+    repo_id = _hub_repo_id(config_name)
+
+    def _push() -> None:
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=hf_token)
+            api.create_repo(repo_id, exist_ok=True, repo_type="model", private=False)
+            api.upload_folder(
+                folder_path=ckpt_path,
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=f"auto-checkpoint step {step}",
+                ignore_patterns=["*.lock"],
+            )
+            print(f"[hub-push] step {step} → {repo_id} ✓", flush=True)
+        except Exception as _e:
+            print(f"[hub-push] step {step} warn (non-fatal): {_e}", flush=True)
+
+    t = threading.Thread(target=_push, daemon=True)
+    t.start()
+
+
+def _recover_checkpoint_from_hub(checkpoint_root: str, config_name: str) -> str | None:
+    """Download latest checkpoint from HF Hub when local disk has been wiped.
+    Returns path to downloaded checkpoint directory, or None if unavailable."""
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token:
+        return None
+    repo_id = _hub_repo_id(config_name)
+    local_dir = os.path.join(checkpoint_root, "hub-recovery")
+    try:
+        from huggingface_hub import snapshot_download
+        os.makedirs(local_dir, exist_ok=True)
+        snapshot_download(
+            repo_id=repo_id,
+            local_dir=local_dir,
+            token=hf_token,
+            ignore_patterns=["*.gguf", "*.ggml"],
+        )
+        print(f"[hub-recovery] downloaded checkpoint from {repo_id} → {local_dir}", flush=True)
+        return local_dir
+    except Exception as _e:
+        print(f"[hub-recovery] no Hub checkpoint found ({repo_id}): {_e}", flush=True)
+        return None
 
 
 def _find_latest_checkpoint(checkpoint_root: str) -> str | None:
