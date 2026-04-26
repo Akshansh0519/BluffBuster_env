@@ -1428,7 +1428,11 @@ class _TrainedExaminerWrapper:
         tok = self.__class__.tokenizer
         cfg = self.__class__.config
         model = self.__class__.model
-        max_new = 256
+        try:
+            max_new = int(os.environ.get("EVAL_MAX_NEW_TOKENS", "256"))
+        except ValueError:
+            max_new = 256
+        max_new = max(64, min(512, max_new))
         # Reserve room for generation: cap prompt at (max_seq_length - max_new).
         max_prompt_tokens = max(64, int(cfg.max_seq_length) - max_new)
         prompt = build_prompt(observation)
@@ -1477,6 +1481,8 @@ def run_eval_only(config_name: str, eval_config: dict) -> dict:
     hf_token = os.environ.get("HF_TOKEN", "")
     owner = "Akshansh1020"
     hub_model_id = f"{owner}/bluffbuster-{config_name.lower()}"
+    # Speed mode for eval-only: shorter generations are enough for JSON actions.
+    os.environ["EVAL_MAX_NEW_TOKENS"] = "128"
 
     # ── 1. Load base + apply saved LoRA ───────────────────────────────────────
     _model_dtype = torch.float16 if torch.cuda.is_available() else None
