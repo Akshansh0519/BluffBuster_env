@@ -149,10 +149,56 @@ FULL_CONFIG = TrainingConfig(
     eval_every_n_steps=10_000,
 )
 
+# ──────────────────────────────────────────────────────────
+# FAST  — Optimized for hackathon submission under tight budget
+# 1.5B model + 350 optimizer steps on A100 (~70 min, ~$2.30)
+# Use this when 7B configs are infeasible due to time/credit limits.
+# ──────────────────────────────────────────────────────────
+FAST_CONFIG = TrainingConfig(
+    config_name="FAST",
+    sections=["S01", "S02", "S03", "S04", "S05"],
+    max_turns=4,
+    # 700 episodes / batch_size=2 = 350 optimizer steps.
+    num_episodes=700,
+    fake_styles_train=["F1", "F2"],
+    eval_styles_held_out=["F3"],
+    held_out_sections=["S05"],
+    eval_episodes=15,
+    # 1.5B base model: ~5-6× faster per step than 7B; sufficient capacity
+    # for JSON action format learning given GRPO + 350 steps.
+    model_name="Qwen/Qwen2.5-1.5B-Instruct",
+    lora_rank=16,
+    lora_alpha=32,
+    # 1024 is enough for prompt+JSON output; halves attention compute vs 2048.
+    max_seq_length=1024,
+    batch_size=2,
+    # Halved gradient accumulation vs DEMO/FULL: still 8 effective batch,
+    # but updates twice as often -> faster convergence per wall-clock.
+    gradient_accumulation=4,
+    # Slightly higher LR helps small model converge in fewer steps.
+    learning_rate=1e-5,
+    # 4 generations (down from 8) halves per-step compute; group still
+    # large enough for stable GRPO advantage estimation.
+    num_generations=4,
+    bf16=True,
+    use_4bit=True,
+    beta_kl=0.04,
+    advantage_clip=5.0,
+    reward_variance_floor=0.05,
+    reward_variance_ceiling=1.5,
+    max_grad_norm=1.0,
+    warmup_ratio=0.05,
+    # Frequent Hub checkpoints so progress survives any rebuild.
+    checkpoint_every_n_steps=25,
+    eval_every_n_steps=10_000,
+)
+
+
 CONFIGS = {
     "DEBUG": DEBUG_CONFIG,
     "DEMO": DEMO_CONFIG,
     "FULL": FULL_CONFIG,
+    "FAST": FAST_CONFIG,
 }
 
 
