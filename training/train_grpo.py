@@ -1049,50 +1049,70 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                 except Exception as _e:
                     print(f"[ckpt] WARNING: training_state.json write failed: {_e}")
 
-                # Upload to HF Hub so the checkpoint survives a Space restart.
-                # Uses HF_TOKEN env var (set as a Space secret).
+                # Upload to HF Hub in a BACKGROUND THREAD so training is never
+                # blocked waiting for network I/O (~50 MB per upload can take
+                # 30-90 sec on HF Spaces — keeping it synchronous was the main
+                # cause of the 6× training slowdown observed in the DEMO run).
                 _hf_token = os.environ.get("HF_TOKEN")
                 _repo_id  = os.environ.get(
                     "CHECKPOINT_REPO",
                     "Samarth1401/bluffbuster-checkpoints",
                 )
                 if _hf_token and os.path.isdir(lora_dir):
-                    try:
-                        from huggingface_hub import HfApi as _HfApi
-                        _api = _HfApi(token=_hf_token)
-                        _api.create_repo(
-                            repo_id=_repo_id,
-                            repo_type="model",
-                            exist_ok=True,
-                            private=True,
-                        )
-                        _api.upload_folder(
-                            folder_path=lora_dir,
-                            repo_id=_repo_id,
-                            repo_type="model",
-                            path_in_repo=f"lora-step-{step}",
-                            commit_message=f"LoRA checkpoint step {step} "
-                                           f"({config.config_name})",
-                        )
-                        print(f"[ckpt] LoRA adapter uploaded → "
-                              f"hf.co/{_repo_id}/lora-step-{step}")
-                    except Exception as _hub_e:
-                        print(f"[ckpt] WARNING: HF Hub upload failed at step "
-                              f"{step}: {_hub_e}")
+                    import threading as _threading
+                    _upload_dir   = lora_dir
+                    _upload_step  = step
+                    _upload_token = _hf_token
+                    _upload_repo  = _repo_id
+
+                    def _bg_upload(d, s, tok, repo, cfg_name):
+                        try:
+                            from huggingface_hub import HfApi as _HfApi
+                            _a = _HfApi(token=tok)
+                            _a.create_repo(repo_id=repo, repo_type="model",
+                                           exist_ok=True, private=True)
+                            _a.upload_folder(
+                                folder_path=d,
+                                repo_id=repo,
+                                repo_type="model",
+                                path_in_repo=f"lora-step-{s}",
+                                commit_message=f"LoRA checkpoint step {s} ({cfg_name})",
+                            )
+                            print(f"[ckpt] LoRA step-{s} uploaded → hf.co/{repo}")
+                        except Exception as _e:
+                            print(f"[ckpt] WARNING: Hub upload step-{s} failed: {_e}")
+
+                    _t = _threading.Thread(
+                        target=_bg_upload,
+                        args=(_upload_dir, _upload_step, _upload_token,
+                              _upload_repo, config.config_name),
+                        daemon=True,
+                    )
+                    _t.start()
 
             # ── Checkpoint eval ────────────────────────────────────────────
-            # CRITICAL: switch model to eval mode + no_grad before inference.
-            # Calling model.generate() in training mode with gradient
-            # checkpointing enabled causes OOM (builds full compute graph).
+            # Uses a reduced episode count for mid-training pulse-checks to
+            # keep eval fast (~2 min not ~10 min). Full eval runs at the end.
+            # CRITICAL: model.eval() + no_grad prevent OOM (gradient checkpointing
+            # builds a full compute graph during generate() otherwise).
+            # CRITICAL: torch.cuda.empty_cache() after eval prevents VRAM
+            # fragmentation that caused 6× training slowdown in the DEMO run.
             if step % config.eval_every_n_steps == 0:
-                print(f"\n[step {step}] Checkpoint eval...")
+                _ckpt_eval_episodes = min(10, config.eval_episodes)
+                print(f"\n[step {step}] Checkpoint eval "
+                      f"({_ckpt_eval_episodes} episodes)...")
                 _TrainedExaminerWrapper.model = model
                 _TrainedExaminerWrapper.tokenizer = tokenizer
                 _TrainedExaminerWrapper.config = config
+                # Build a fast eval_config with reduced episodes
+                _fast_eval_cfg = {**eval_config,
+                                  "num_episodes": _ckpt_eval_episodes}
                 try:
                     model.eval()
                     with torch.no_grad():
-                        chk = run_eval(_TrainedExaminerWrapper(), eval_config, KB)
+                        chk = run_eval(
+                            _TrainedExaminerWrapper(), _fast_eval_cfg, KB
+                        )
                     checkpoint_metrics_log[str(step)] = chk
                     os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
                     with open(
@@ -1118,6 +1138,9 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
                           f"{_eval_exc}")
                 finally:
                     model.train()
+                    # Release any VRAM held by eval inference before next train step.
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
 
     # ── GRPOConfig ──────────────────────────────────────────────────────────
     # Precision: use device capability (reliable) not is_bf16_supported()
