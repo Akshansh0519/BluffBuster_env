@@ -1023,6 +1023,10 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         print("[resume] No checkpoint found. Starting fresh run.")
         trainer.train()
 
+    # ── Immediately persist trained model to Hub (before eval can crash) ─────
+    print("\n[hub-save] Pushing trained model to HF Hub before final eval...", flush=True)
+    _save_all_to_hub(model, tokenizer, config.config_name, final_metrics=None)
+
     # ── Final held-out eval ───────────────────────────────────────────────
     print("\nRunning final held-out eval...")
     _TrainedExaminerWrapper.model = model
@@ -1076,6 +1080,19 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         f"info_gain={final_metrics['avg_info_gain_per_turn']:.4f} "
         f"ECE={final_metrics['calibration_ECE']:.4f}"
     )
+
+    # ── Save model + all results to Hub permanently ───────────────────────────
+    print("\n[hub-save] Pushing final model + results to HF Hub...", flush=True)
+    _hub_urls = _save_all_to_hub(model, tokenizer, config.config_name, final_metrics=final_metrics)
+    if _hub_urls:
+        print(
+            f"\n{'='*60}\n"
+            f"  RESULTS PERMANENTLY SAVED — share these links:\n"
+            f"  Model   : {_hub_urls.get('model', 'n/a')}\n"
+            f"  Results : {_hub_urls.get('results', 'n/a')}\n"
+            f"{'='*60}\n",
+            flush=True,
+        )
 
     if _WANDB_AVAILABLE and wandb.run:
         wandb.log({
@@ -1171,6 +1188,171 @@ def _recover_checkpoint_from_hub(checkpoint_root: str, config_name: str) -> str 
     except Exception as _e:
         print(f"[hub-recovery] no Hub checkpoint found ({repo_id}): {_e}", flush=True)
         return None
+
+
+def _save_all_to_hub(
+    model,
+    tokenizer,
+    config_name: str,
+    final_metrics: dict | None = None,
+) -> dict[str, str]:
+    """
+    Persistently save the trained LoRA adapter + every result file to HF Hub.
+
+    Two repos are created / updated:
+      • huggingface.co/<user>/bluffbuster-<config_name>          — model (LoRA adapter)
+      • huggingface.co/datasets/<user>/bluffbuster-<config_name>-results — JSON metrics + README
+
+    Returns a dict with the public URLs so callers can surface them in the UI.
+    Non-fatal: any failure prints a warning and returns {}.
+    """
+    hf_token = os.environ.get("HF_TOKEN", "")
+    if not hf_token:
+        print("[hub-save] HF_TOKEN not set — skipping permanent Hub save.", flush=True)
+        return {}
+
+    owner = "Akshansh1020"
+    model_repo    = f"{owner}/bluffbuster-{config_name.lower()}"
+    results_repo  = f"{owner}/bluffbuster-{config_name.lower()}-results"
+    urls: dict[str, str] = {}
+
+    # ── 1. Save LoRA adapter locally then push to Hub ─────────────────────────
+    try:
+        local_model_dir = os.path.join("outputs", f"lora_model_{config_name.lower()}")
+        print(f"[hub-save] Saving LoRA adapter to {local_model_dir} ...", flush=True)
+        model.save_pretrained(local_model_dir)
+        tokenizer.save_pretrained(local_model_dir)
+
+        from huggingface_hub import HfApi
+        api = HfApi(token=hf_token)
+        api.create_repo(model_repo, exist_ok=True, repo_type="model", private=False)
+        api.upload_folder(
+            folder_path=local_model_dir,
+            repo_id=model_repo,
+            repo_type="model",
+            commit_message=f"BluffBuster {config_name} trained LoRA adapter",
+            ignore_patterns=["*.lock"],
+        )
+        model_url = f"https://huggingface.co/{model_repo}"
+        urls["model"] = model_url
+        print(f"[hub-save] Model saved → {model_url}  ✓", flush=True)
+    except Exception as _e:
+        print(f"[hub-save] model push WARN (non-fatal): {_e}", flush=True)
+
+    # ── 2. Collect all JSON result files ──────────────────────────────────────
+    try:
+        from huggingface_hub import HfApi  # already imported above, safe to re-import
+        api = HfApi(token=hf_token)
+        api.create_repo(results_repo, exist_ok=True, repo_type="dataset", private=False)
+
+        result_files = [
+            os.path.join("outputs", "eval", "final_metrics.json"),
+            os.path.join("outputs", "eval", "final_metrics_fallback.json"),
+            os.path.join("outputs", "eval", "baseline_metrics.json"),
+            os.path.join("outputs", "eval", "checkpoint_metrics.json"),
+            os.path.join("outputs", "eval", "oracle_calibration.json"),
+        ]
+        uploaded: list[str] = []
+        for fpath in result_files:
+            if os.path.exists(fpath):
+                api.upload_file(
+                    path_or_fileobj=fpath,
+                    path_in_repo=os.path.basename(fpath),
+                    repo_id=results_repo,
+                    repo_type="dataset",
+                    commit_message=f"upload {os.path.basename(fpath)}",
+                )
+                uploaded.append(os.path.basename(fpath))
+
+        # ── 3. Write a human-readable README with the numbers ─────────────────
+        acc   = (final_metrics or {}).get("classification_accuracy", float("nan"))
+        rew   = (final_metrics or {}).get("reward_mean",             float("nan"))
+        ece   = (final_metrics or {}).get("calibration_ECE",         float("nan"))
+        gain  = (final_metrics or {}).get("avg_info_gain_per_turn",  float("nan"))
+        far   = (final_metrics or {}).get("false_accusation_rate",   float("nan"))
+
+        def _fmt(v: float) -> str:
+            return f"{v:.4f}" if not (v != v) else "—"  # nan check
+
+        readme_text = f"""\
+# BluffBuster — {config_name.upper()} Results
+
+Trained LoRA adapter: [{model_repo}](https://huggingface.co/{model_repo})
+
+## Final Evaluation Metrics
+
+| Metric | Value |
+|--------|-------|
+| Classification Accuracy | {_fmt(acc)} |
+| Reward Mean | {_fmt(rew)} |
+| Calibration ECE | {_fmt(ece)} |
+| Avg Info Gain / Turn | {_fmt(gain)} |
+| False Accusation Rate | {_fmt(far)} |
+
+## Files in this repo
+
+| File | Description |
+|------|-------------|
+| `final_metrics.json` | Full per-metric results after {config_name} training |
+| `baseline_metrics.json` | Pre-training baselines (Random / Definitional / Bayesian) |
+| `checkpoint_metrics.json` | Mid-training evaluation snapshots (if run) |
+
+## How to load the model
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+base = AutoModelForCausalLM.from_pretrained("unsloth/Qwen2.5-1.5B-Instruct")
+model = PeftModel.from_pretrained(base, "{model_repo}")
+tokenizer = AutoTokenizer.from_pretrained("{model_repo}")
+```
+"""
+        import tempfile
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write(readme_text)
+            tmp_path = tmp.name
+
+        api.upload_file(
+            path_or_fileobj=tmp_path,
+            path_in_repo="README.md",
+            repo_id=results_repo,
+            repo_type="dataset",
+            commit_message="add results README",
+        )
+        os.unlink(tmp_path)
+
+        results_url = f"https://huggingface.co/datasets/{results_repo}"
+        urls["results"] = results_url
+        print(
+            f"[hub-save] Results saved → {results_url}  "
+            f"({len(uploaded)} JSON files + README)  ✓",
+            flush=True,
+        )
+
+        # ── 4. Also persist a local copy so the Space UI can read it ──────────
+        summary_path = os.path.join("outputs", "eval", "hub_share_links.json")
+        os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
+        with open(summary_path, "w") as _sf:
+            json.dump({
+                "model_url":   urls.get("model", ""),
+                "results_url": urls.get("results", ""),
+                "metrics":     {
+                    "classification_accuracy": acc,
+                    "reward_mean":             rew,
+                    "calibration_ECE":         ece,
+                    "avg_info_gain_per_turn":  gain,
+                    "false_accusation_rate":   far,
+                },
+            }, _sf, indent=2)
+        print(f"[hub-save] Share links written to {summary_path}", flush=True)
+
+    except Exception as _e:
+        print(f"[hub-save] results push WARN (non-fatal): {_e}", flush=True)
+
+    return urls
 
 
 def _find_latest_checkpoint(checkpoint_root: str) -> str | None:

@@ -481,14 +481,41 @@ def create_app():
                     gain = final_metrics.get("avg_info_gain_per_turn", float("nan"))
                     ece = final_metrics.get("calibration_ECE", float("nan"))
                     r_mean = final_metrics.get("reward_mean", float("nan"))
+                    far   = final_metrics.get("false_accusation_rate", float("nan"))
+
+                    # Read Hub share links written by _save_all_to_hub
+                    links_path = os.path.join("outputs", "eval", "hub_share_links.json")
+                    model_url   = ""
+                    results_url = ""
+                    if os.path.exists(links_path):
+                        try:
+                            with open(links_path) as _lf:
+                                _links = json.load(_lf)
+                            model_url   = _links.get("model_url", "")
+                            results_url = _links.get("results_url", "")
+                        except Exception:
+                            pass
+
+                    share_block = (
+                        f"\n{'='*55}\n"
+                        f"  PERMANENT SHARE LINKS (survive rebuilds):\n"
+                        f"  🤗 Model   : {model_url or 'see Space logs'}\n"
+                        f"  📊 Results : {results_url or 'see Space logs'}\n"
+                        f"{'='*55}\n"
+                    ) if (model_url or results_url) else (
+                        "\n  (Hub save running in background — check Space logs for links)\n"
+                    )
+
                     return (
                         f"✅ Training complete ({config_name})\n"
-                        f"  Resume policy: auto-resume from latest checkpoint if present\n"
                         f"  Classification accuracy (held-out): {acc:.3f}\n"
-                        f"  Avg info gain/turn:                 {gain:.4f}\n"
+                        f"  Avg info gain / turn:               {gain:.4f}\n"
                         f"  Calibration ECE:                    {ece:.4f}\n"
-                        f"  Mean R_total:                       {r_mean:.4f}\n\n"
-                        f"Artifacts → outputs/eval/  |  W&B: https://wandb.ai (project: bluffbuster-examiner)"
+                        f"  Mean R_total:                       {r_mean:.4f}\n"
+                        f"  False accusation rate:              {far:.4f}\n"
+                        f"{share_block}"
+                        f"W&B: https://wandb.ai (project: bluffbuster-examiner)\n"
+                        f"All JSON metrics → outputs/eval/"
                     )
                 except Exception:
                     return f"ERROR:\n{traceback.format_exc()}"
