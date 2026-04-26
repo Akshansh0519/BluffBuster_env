@@ -1155,6 +1155,7 @@ def _push_checkpoint_to_hub_async(ckpt_path: str, config_name: str, step: int) -
                 folder_path=ckpt_path,
                 repo_id=repo_id,
                 repo_type="model",
+                path_in_repo=f"checkpoint-{step}",
                 commit_message=f"auto-checkpoint step {step}",
                 ignore_patterns=["*.lock"],
             )
@@ -1183,8 +1184,28 @@ def _recover_checkpoint_from_hub(checkpoint_root: str, config_name: str) -> str 
             token=hf_token,
             ignore_patterns=["*.gguf", "*.ggml"],
         )
-        print(f"[hub-recovery] downloaded checkpoint from {repo_id} → {local_dir}", flush=True)
-        return local_dir
+        # Optional manual override: RESUME_CHECKPOINT_STEP=30 resumes checkpoint-30.
+        requested_step = os.environ.get("RESUME_CHECKPOINT_STEP", "").strip()
+        if requested_step:
+            forced = os.path.join(local_dir, f"checkpoint-{requested_step}")
+            if os.path.isdir(forced):
+                print(
+                    f"[hub-recovery] using requested checkpoint step {requested_step}: {forced}",
+                    flush=True,
+                )
+                return forced
+            print(
+                f"[hub-recovery] RESUME_CHECKPOINT_STEP={requested_step} not found; "
+                "falling back to latest checkpoint.",
+                flush=True,
+            )
+
+        latest = _find_latest_checkpoint(local_dir)
+        if latest is not None:
+            print(f"[hub-recovery] downloaded latest checkpoint from {repo_id} → {latest}", flush=True)
+            return latest
+        print(f"[hub-recovery] downloaded {repo_id} but no checkpoint-* dirs found.", flush=True)
+        return None
     except Exception as _e:
         print(f"[hub-recovery] no Hub checkpoint found ({repo_id}): {_e}", flush=True)
         return None
