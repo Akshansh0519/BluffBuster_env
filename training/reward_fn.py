@@ -1,12 +1,19 @@
 """
-training/reward_fn.py — GRPO reward bridge.
+training/reward_fn.py — GRPO reward functions.
 C2 owns.
 
-CRITICAL: This file DELEGATES to examiner_env.reward.compute_reward().
-It does NOT re-implement any reward logic. AI will try to inline reward
-computation here — that is a 🔴 BLOCKER error (see mistakes.md).
+Two reward function interfaces are provided:
 
-Also contains: log_reward_breakdown() W&B scaffold.
+1. reward_func(environments, **kwargs) — TRL OpenEnv pattern (PRIMARY).
+   Used with GRPOTrainer(environment_factory=ExaminerToolEnv).
+   Reads env.reward from each ExaminerToolEnv instance after the episode.
+   Per TRL docs: https://huggingface.co/docs/trl/en/openenv#reward-functions
+
+2. reward_fn(completions, prompts, **kwargs) — legacy bridge (kept for compat).
+   Used only if falling back to a non-environment-factory training loop.
+   DELEGATES to examiner_env.reward.compute_reward(). Never re-implements logic.
+
+Also contains: log_reward_breakdown() and init_wandb() helpers.
 """
 
 from __future__ import annotations
@@ -35,6 +42,43 @@ except ImportError:
     _WANDB_AVAILABLE = False
 
 _global_step = 0
+
+
+# ---------------------------------------------------------------------------
+# TRL OpenEnv reward function (PRIMARY — used with environment_factory)
+# ---------------------------------------------------------------------------
+
+def reward_func(environments: list, **kwargs) -> list[float]:
+    """
+    TRL OpenEnv reward function signature.
+    Called after each generation batch by GRPOTrainer when environment_factory
+    is used. Reads env.reward from each ExaminerToolEnv instance.
+
+    Per TRL docs pattern (Wordle/Echo/Sudoku examples):
+      def reward_func(environments, **kwargs):
+          return [env.reward for env in environments]
+
+    This version also logs per-component rewards to W&B.
+    """
+    rewards = [float(env.reward) for env in environments]
+
+    if _WANDB_AVAILABLE and wandb.run is not None:
+        wandb.log({
+            "reward/R_total_batch_mean": float(np.mean(rewards)),
+            "reward/R_total_batch_std": float(np.std(rewards)),
+            "reward/R_total_batch_min": float(np.min(rewards)),
+            "reward/R_total_batch_max": float(np.max(rewards)),
+            "reward/R_acc_mean": float(np.mean([getattr(env, "r_acc", 0.0) for env in environments])),
+            "reward/R_info_mean": float(np.mean([getattr(env, "r_info", 0.0) for env in environments])),
+            "reward/R_cal_mean": float(np.mean([getattr(env, "r_cal", 0.0) for env in environments])),
+            "reward/R_eff_mean": float(np.mean([getattr(env, "r_eff", 0.0) for env in environments])),
+            "reward/R_qual_mean": float(np.mean([getattr(env, "r_qual", 0.0) for env in environments])),
+            "training/parse_failure_rate": float(
+                np.mean([float(getattr(env, "parse_failure", False)) for env in environments])
+            ),
+        })
+
+    return rewards
 
 
 # ---------------------------------------------------------------------------

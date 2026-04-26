@@ -608,13 +608,11 @@ def _check_reward_variance(
 
     if _WANDB_AVAILABLE and wandb.run:
         wandb.log({"reward/variance_monitor": variance}, step=step)
-
     if variance < config.reward_variance_floor:
         print(f"WARNING [step {step}]: Reward variance {variance:.4f} "
               f"< floor {config.reward_variance_floor} — signal may have collapsed.")
         if _WANDB_AVAILABLE and wandb.run:
             wandb.log({"warning/reward_variance_collapsed": 1}, step=step)
-
     if variance > config.reward_variance_ceiling:
         new_beta = min(0.10, current_beta_kl * 1.5)
         print(f"WARNING [step {step}]: Variance {variance:.4f} "
@@ -623,7 +621,6 @@ def _check_reward_variance(
         if _WANDB_AVAILABLE and wandb.run:
             wandb.log({"adaptive/beta_kl": new_beta}, step=step)
         return new_beta
-
     return current_beta_kl
 
 
@@ -760,7 +757,7 @@ def _hub_restore_lora(
 
 def train(config: TrainingConfig, eval_config: dict) -> dict:
     """
-    Full GRPO training loop.
+    Full GRPO training with TRL environment_factory.
 
     Flow:
       1. Init W&B
@@ -1201,6 +1198,7 @@ def train(config: TrainingConfig, eval_config: dict) -> dict:
         args=grpo_config,
         train_dataset=dataset,
         tokenizer=tokenizer,
+        environment_factory=ExaminerToolEnv,
         callbacks=[EvalAndMonitorCallback()],
     )
 
