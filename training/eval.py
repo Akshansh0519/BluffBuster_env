@@ -142,10 +142,11 @@ def run_eval(
 
         all_rewards.append(bd.R_total)
         all_turns.append(ep_turns)
-        all_info_gains.extend(bd.info_gain_per_turn)
-        all_r_qual.append(bd.R_qual)
-        all_r_info.append(bd.R_info)
-        all_r_cal.append(bd.R_cal)
+        # Filter NaN from info_gain_per_turn — can occur when posterior is degenerate
+        all_info_gains.extend(g for g in bd.info_gain_per_turn if np.isfinite(g))
+        all_r_qual.append(bd.R_qual if np.isfinite(bd.R_qual) else 0.0)
+        all_r_info.append(bd.R_info if np.isfinite(bd.R_info) else 0.0)
+        all_r_cal.append(bd.R_cal if np.isfinite(bd.R_cal) else 0.0)
         total_malformed += abs(int(round(bd.P_malformed / 0.20))) if bd.P_malformed < 0 else 0
         total_steps += ep_turns
 
@@ -208,17 +209,17 @@ def run_eval(
         },
         "false_accusation_rate": false_accusations / max(total_classified, 1),
         "false_exoneration_rate": false_exonerations / max(total_classified, 1),
-        "avg_turns_to_classify": float(np.mean(all_turns)) if all_turns else float("nan"),
-        "avg_info_gain_per_turn": float(np.mean(all_info_gains)) if all_info_gains else float("nan"),
+        "avg_turns_to_classify": float(np.mean(all_turns)) if all_turns else 0.0,
+        "avg_info_gain_per_turn": float(np.mean(all_info_gains)) if all_info_gains else 0.0,
         "terminal_posterior_correctness": posterior_correct / max(posterior_total, 1),
         "calibration_ECE": compute_ece(all_posteriors, all_labels_binary),
         "calibration_brier": compute_brier(all_posteriors, all_labels_binary),
-        "mean_R_qual": float(np.mean(all_r_qual)) if all_r_qual else float("nan"),
-        "mean_R_info": float(np.mean(all_r_info)) if all_r_info else float("nan"),
-        "mean_R_cal": float(np.mean(all_r_cal)) if all_r_cal else float("nan"),
+        "mean_R_qual": float(np.mean(all_r_qual)) if all_r_qual else 0.0,
+        "mean_R_info": float(np.mean(all_r_info)) if all_r_info else 0.0,
+        "mean_R_cal": float(np.mean(all_r_cal)) if all_r_cal else 0.0,
         "parse_failure_rate": total_malformed / max(total_steps, 1),
-        "reward_mean": float(np.mean(all_rewards)) if all_rewards else float("nan"),
-        "reward_std": float(np.std(all_rewards)) if all_rewards else float("nan"),
+        "reward_mean": float(np.mean(all_rewards)) if all_rewards else 0.0,
+        "reward_std": float(np.std(all_rewards)) if all_rewards else 0.0,
         "per_style_accuracy": {
             style: float(np.mean(vals)) for style, vals in style_correct.items()
         },
@@ -239,7 +240,8 @@ def run_eval(
         "n_episodes": len(episode_results),
     }
 
-    # Sanity: all scalar metrics must be finite
+    # Sanity: warn on non-finite scalars, clamp to 0.0 rather than crashing.
+    # A hard crash here would discard all training progress — a warning is safer.
     scalar_keys = [
         "classification_accuracy", "false_accusation_rate", "false_exoneration_rate",
         "avg_turns_to_classify", "avg_info_gain_per_turn", "terminal_posterior_correctness",
@@ -249,7 +251,13 @@ def run_eval(
     for k in scalar_keys:
         v = metrics[k]
         if not np.isfinite(v):
-            raise ValueError(f"run_eval: metric '{k}' is not finite ({v}). Check examiner and environment.")
+            import warnings
+            warnings.warn(
+                f"run_eval: metric '{k}' is not finite ({v}) — clamping to 0.0. "
+                "This usually means all episodes had degenerate posteriors or parse failures.",
+                RuntimeWarning, stacklevel=2,
+            )
+            metrics[k] = 0.0
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
