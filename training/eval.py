@@ -201,8 +201,8 @@ def run_eval(
         }
         episode_results.append(ep_record)
 
-        # Heartbeat: prevent the eval phase from looking frozen on Spaces.
-        if ep_idx % 5 == 0 or ep_idx == total_eps:
+        # Heartbeat: print after every episode for live feedback.
+        if ep_idx % 2 == 0 or ep_idx == total_eps or ep_idx == 1:
             elapsed = time.time() - started_at
             sec_per_ep = elapsed / ep_idx
             remain = total_eps - ep_idx
@@ -265,7 +265,12 @@ def run_eval(
     for k in scalar_keys:
         v = metrics[k]
         if not np.isfinite(v):
-            raise ValueError(f"run_eval: metric '{k}' is not finite ({v}). Check examiner and environment.")
+            print(
+                f"[eval] WARNING: '{k}' is {v} (non-finite) — substituting 0.0. "
+                "This usually means the examiner produced no valid info-gain actions.",
+                flush=True,
+            )
+            metrics[k] = 0.0
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)

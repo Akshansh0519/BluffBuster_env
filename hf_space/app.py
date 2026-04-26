@@ -426,11 +426,16 @@ def create_app():
                 elem_id="train_config_preset",
             )
             train_btn = gr.Button("🚀 Launch Training", variant="primary", size="lg")
+            eval_only_btn = gr.Button(
+                "⚡ Eval Only (load saved model from Hub — no training)",
+                variant="secondary",
+                size="lg",
+            )
             train_output = gr.Textbox(
-                label="Training Log / Result",
+                label="Training / Eval Log",
                 lines=20,
                 interactive=False,
-                placeholder="Training output will appear here...",
+                placeholder="Output will appear here...",
             )
 
             def run_training_on_space(config_name: str) -> str:
@@ -520,8 +525,67 @@ def create_app():
                 except Exception:
                     return f"ERROR:\n{traceback.format_exc()}"
 
+            def run_eval_only_on_space(config_name: str) -> str:
+                """Load saved LoRA from Hub and run eval — zero training steps."""
+                import traceback
+                hf_token = os.environ.get("HF_TOKEN", "")
+                if not hf_token:
+                    return "ERROR: HF_TOKEN secret not set in this Space."
+                try:
+                    from training.config import get_config
+                    from training.train_grpo import run_eval_only
+
+                    os.environ["HF_TOKEN"] = hf_token
+                    # Cap eval at 10 episodes for speed (~20 min on A100)
+                    os.environ["FINAL_EVAL_EPISODES"] = "10"
+
+                    for d in ["outputs/eval", "outputs/plots"]:
+                        os.makedirs(d, exist_ok=True)
+
+                    with open("eval_config.json") as f:
+                        eval_config = json.load(f)
+
+                    print(f"[app] Starting eval-only for {config_name}...", flush=True)
+                    final_metrics = run_eval_only(config_name, eval_config)
+
+                    acc   = final_metrics.get("classification_accuracy", float("nan"))
+                    gain  = final_metrics.get("avg_info_gain_per_turn", float("nan"))
+                    ece   = final_metrics.get("calibration_ECE", float("nan"))
+                    r_mean = final_metrics.get("reward_mean", float("nan"))
+                    far   = final_metrics.get("false_accusation_rate", float("nan"))
+
+                    links_path = os.path.join("outputs", "eval", "hub_share_links.json")
+                    results_url = ""
+                    if os.path.exists(links_path):
+                        try:
+                            with open(links_path) as _lf:
+                                _links = json.load(_lf)
+                            results_url = _links.get("results_url", "")
+                        except Exception:
+                            pass
+
+                    return (
+                        f"✅ Eval-only complete ({config_name}) — NO retraining\n"
+                        f"  Classification accuracy : {acc:.3f}\n"
+                        f"  Avg info gain / turn   : {gain:.4f}\n"
+                        f"  Calibration ECE        : {ece:.4f}\n"
+                        f"  Mean R_total           : {r_mean:.4f}\n"
+                        f"  False accusation rate  : {far:.4f}\n\n"
+                        f"{'='*55}\n"
+                        f"  Results + plot → {results_url or 'outputs/eval/'}\n"
+                        f"{'='*55}"
+                    )
+                except Exception:
+                    return f"ERROR (eval-only):\n{traceback.format_exc()}"
+
             train_btn.click(
                 fn=run_training_on_space,
+                inputs=[train_config_choice],
+                outputs=[train_output],
+            )
+
+            eval_only_btn.click(
+                fn=run_eval_only_on_space,
                 inputs=[train_config_choice],
                 outputs=[train_output],
             )

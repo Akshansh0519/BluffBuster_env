@@ -1451,6 +1451,189 @@ class _TrainedExaminerWrapper:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Eval-only entry point (no retraining — loads saved LoRA from HF Hub)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def run_eval_only(config_name: str, eval_config: dict) -> dict:
+    """
+    Load the trained LoRA from HF Hub and run final eval — zero training steps.
+    Safe to call after a Space rebuild: model comes from permanent Hub storage.
+
+    Steps:
+      1. Load base model (same as training: Qwen2.5-7B 4-bit via Unsloth)
+      2. Apply saved LoRA adapter from Hub  (Akshansh1020/bluffbuster-<config>)
+      3. Switch to Unsloth inference kernels
+      4. Run eval over eval_config seeds (bounded by FINAL_EVAL_EPISODES env var)
+      5. Save plots + push all results to Hub
+    """
+    import torch
+    from unsloth import FastLanguageModel
+    from peft import PeftModel
+    from training.config import get_config
+    from training.eval import run_eval
+    from examiner_env.knowledge_base import KB
+
+    config = get_config(config_name)
+    hf_token = os.environ.get("HF_TOKEN", "")
+    owner = "Akshansh1020"
+    hub_model_id = f"{owner}/bluffbuster-{config_name.lower()}"
+
+    # ── 1. Load base + apply saved LoRA ───────────────────────────────────────
+    _model_dtype = torch.float16 if torch.cuda.is_available() else None
+    print(f"[eval-only] Loading base model {config.model_name} (4-bit)...", flush=True)
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=config.model_name,
+        max_seq_length=config.max_seq_length,
+        load_in_4bit=config.use_4bit,
+        dtype=_model_dtype,
+        token=hf_token or None,
+    )
+    print(f"[eval-only] Applying saved LoRA from {hub_model_id}...", flush=True)
+    try:
+        model = PeftModel.from_pretrained(model, hub_model_id, token=hf_token or None)
+        print(f"[eval-only] LoRA adapter loaded ✓", flush=True)
+    except Exception as _peft_err:
+        print(f"[eval-only] PeftModel load failed: {_peft_err}", flush=True)
+        raise
+
+    try:
+        tokenizer.model_max_length = int(config.max_seq_length)
+    except Exception:
+        pass
+
+    # ── 2. Switch to inference kernels ────────────────────────────────────────
+    try:
+        FastLanguageModel.for_inference(model)
+        print("[eval-only] Unsloth inference kernels active ✓", flush=True)
+    except Exception as _swap_err:
+        print(f"[eval-only] for_inference warn (non-fatal): {_swap_err}", flush=True)
+
+    # ── 3. Wire examiner wrapper ───────────────────────────────────────────────
+    _TrainedExaminerWrapper.model     = model
+    _TrainedExaminerWrapper.tokenizer = tokenizer
+    _TrainedExaminerWrapper.config    = config
+
+    # ── 4. Build bounded eval config ──────────────────────────────────────────
+    _override = os.environ.get("FINAL_EVAL_EPISODES", "").strip()
+    _final_eval_cfg = eval_config
+    if _override:
+        try:
+            _n = int(_override)
+            if _n > 0:
+                _final_eval_cfg = dict(eval_config)
+                _final_eval_cfg["seeds"] = list(eval_config.get("seeds", []))[:_n]
+                print(f"[eval-only] FINAL_EVAL_EPISODES={_n} (bounded)", flush=True)
+        except ValueError:
+            pass
+
+    os.makedirs(os.path.join("outputs", "eval"), exist_ok=True)
+    print(f"[eval-only] Running eval over {len(_final_eval_cfg.get('seeds', []))} episodes...", flush=True)
+
+    final_metrics = run_eval(
+        _TrainedExaminerWrapper(),
+        _final_eval_cfg,
+        KB,
+        output_path=os.path.join("outputs", "eval", "final_metrics.json"),
+    )
+
+    print(
+        f"\n[eval-only] RESULTS:\n"
+        f"  accuracy          = {final_metrics['classification_accuracy']:.3f}\n"
+        f"  avg_info_gain     = {final_metrics['avg_info_gain_per_turn']:.4f}\n"
+        f"  calibration_ECE   = {final_metrics['calibration_ECE']:.4f}\n"
+        f"  reward_mean       = {final_metrics['reward_mean']:.4f}\n"
+        f"  false_accuse_rate = {final_metrics['false_accusation_rate']:.4f}\n",
+        flush=True,
+    )
+
+    # ── 5. Generate plots ─────────────────────────────────────────────────────
+    _generate_eval_plots(final_metrics, config_name)
+
+    # ── 6. Push everything to Hub ─────────────────────────────────────────────
+    _hub_urls = _save_all_to_hub(model, tokenizer, config_name, final_metrics=final_metrics)
+    if _hub_urls:
+        print(
+            f"\n{'='*60}\n"
+            f"  PERMANENT SHARE LINKS:\n"
+            f"  Model   : {_hub_urls.get('model', 'n/a')}\n"
+            f"  Results : {_hub_urls.get('results', 'n/a')}\n"
+            f"{'='*60}\n",
+            flush=True,
+        )
+
+    return final_metrics
+
+
+def _generate_eval_plots(final_metrics: dict, config_name: str) -> None:
+    """Generate and save comparison bar charts for submission."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        os.makedirs("outputs/plots", exist_ok=True)
+        baseline_path = os.path.join("outputs", "eval", "baseline_metrics.json")
+
+        # ── Accuracy & reward comparison ──────────────────────────────────────
+        labels, accs, rewards = [], [], []
+        if os.path.exists(baseline_path):
+            with open(baseline_path) as f:
+                bl = json.load(f)
+            for name, m in bl.items():
+                short = name.replace("Examiner", "")
+                labels.append(short)
+                accs.append(m.get("classification_accuracy", 0))
+                rewards.append(m.get("reward_mean", 0))
+
+        labels.append(f"Trained\n({config_name})")
+        accs.append(final_metrics.get("classification_accuracy", 0))
+        rewards.append(final_metrics.get("reward_mean", 0))
+
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+        colors = ["#4c72b0"] * (len(labels) - 1) + ["#dd8452"]
+
+        axes[0].bar(labels, accs, color=colors)
+        axes[0].set_title("Classification Accuracy")
+        axes[0].set_ylim(0, 1)
+        axes[0].set_ylabel("Accuracy")
+        for i, v in enumerate(accs):
+            axes[0].text(i, v + 0.01, f"{v:.3f}", ha="center", fontsize=9)
+
+        axes[1].bar(labels, rewards, color=colors)
+        axes[1].set_title("Mean Reward")
+        axes[1].set_ylabel("R_total")
+        for i, v in enumerate(rewards):
+            axes[1].text(i, v + 0.005, f"{v:.3f}", ha="center", fontsize=9)
+
+        plt.suptitle(f"BluffBuster {config_name} — Trained vs Baselines", fontweight="bold")
+        plt.tight_layout()
+        out_path = f"outputs/plots/eval_comparison_{config_name.lower()}.png"
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"[plots] Saved {out_path} ✓", flush=True)
+
+        # Push plot to Hub results repo
+        hf_token = os.environ.get("HF_TOKEN", "")
+        if hf_token:
+            try:
+                from huggingface_hub import HfApi
+                api = HfApi(token=hf_token)
+                results_repo = f"Akshansh1020/bluffbuster-{config_name.lower()}-results"
+                api.upload_file(
+                    path_or_fileobj=out_path,
+                    path_in_repo=os.path.basename(out_path),
+                    repo_id=results_repo,
+                    repo_type="dataset",
+                    commit_message="add eval comparison plot",
+                )
+                print(f"[plots] Pushed to Hub ✓", flush=True)
+            except Exception as _e:
+                print(f"[plots] Hub push warn: {_e}", flush=True)
+    except Exception as _e:
+        print(f"[plots] Plot generation warn (non-fatal): {_e}", flush=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CLI entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
